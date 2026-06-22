@@ -15,6 +15,10 @@ from .const import (
     DOMAIN,
     CONF_PUMP_SWITCH,
     CONF_POWER_SENSOR,
+    CONF_ENERGY_SENSOR,
+    CONF_VOLTAGE_SENSOR,
+    CONF_CURRENT_SENSOR,
+    CONF_FREQUENCY_SENSOR,
     CONF_POOL_VOLUME,
     CONF_PUMP_FLOW_RATE,
     CONF_CIRCULATIONS_PER_DAY,
@@ -69,11 +73,21 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._manual_runtime_hours: float | None = None
 
     # ------------------------------------------------------------------ #
-    # Config properties                                                    #
+    # Config helpers                                                       #
     # ------------------------------------------------------------------ #
 
-    def _opt(self, key: str, default: Any) -> Any:
+    def _opt(self, key: str, default: Any = None) -> Any:
+        """Return value from options first, falling back to data, then default."""
         return self._entry.options.get(key, self._entry.data.get(key, default))
+
+    def _opt_entity(self, key: str) -> str | None:
+        """Return optional entity_id or None for empty / unset."""
+        val = self._opt(key)
+        return val if val else None
+
+    # ------------------------------------------------------------------ #
+    # Config properties                                                    #
+    # ------------------------------------------------------------------ #
 
     @property
     def pump_switch_entity(self) -> str:
@@ -81,7 +95,23 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def power_sensor_entity(self) -> str | None:
-        return self._entry.data.get(CONF_POWER_SENSOR)
+        return self._opt_entity(CONF_POWER_SENSOR)
+
+    @property
+    def energy_sensor_entity(self) -> str | None:
+        return self._opt_entity(CONF_ENERGY_SENSOR)
+
+    @property
+    def voltage_sensor_entity(self) -> str | None:
+        return self._opt_entity(CONF_VOLTAGE_SENSOR)
+
+    @property
+    def current_sensor_entity(self) -> str | None:
+        return self._opt_entity(CONF_CURRENT_SENSOR)
+
+    @property
+    def frequency_sensor_entity(self) -> str | None:
+        return self._opt_entity(CONF_FREQUENCY_SENSOR)
 
     @property
     def pool_volume(self) -> float:
@@ -169,11 +199,12 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state = self.hass.states.get(self.pump_switch_entity)
         return state is not None and state.state == "on"
 
-    def _get_current_power(self) -> float | None:
-        if not self.power_sensor_entity:
+    def _get_metering_value(self, entity_id: str | None) -> float | None:
+        """Read a numeric state from an optional entity."""
+        if not entity_id:
             return None
-        state = self.hass.states.get(self.power_sensor_entity)
-        if state is None or state.state in ("unavailable", "unknown", "None"):
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown", "None", "none"):
             return None
         try:
             return float(state.state)
@@ -181,7 +212,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
 
     def _window_times(self, now: datetime) -> tuple[datetime, datetime]:
-        """Return today's window as aware datetimes."""
+        """Return today's operating window as aware datetimes."""
         tz = now.tzinfo
         today = now.date()
         sh, sm = _parse_time_str(self.start_time_str)
@@ -205,7 +236,6 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if target >= window_hours:
             return [(window_start, window_end)]
 
-        # Distribute evenly: aim for ~2-3 h blocks
         n = max(1, round(window_hours / 4.0))
         hours_per_segment = target / n
         if hours_per_segment < 0.5:
@@ -237,7 +267,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if s > now:
                 return s
             if s <= now < e:
-                return None  # currently running
+                return None
         return None
 
     # ------------------------------------------------------------------ #
@@ -263,14 +293,13 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._warning_active = False
             self._low_power_since = None
 
-        # Rebuild schedule when date or target changes
         if self._schedule_date != today:
             self._schedule = self._calculate_schedule(now)
             self._schedule_date = today
             _LOGGER.debug("Recalculated schedule for %s: %s", today, self._schedule)
 
         pump_on = self._is_pump_on()
-        power = self._get_current_power()
+        power = self._get_metering_value(self.power_sensor_entity)
 
         # Runtime tracking
         if pump_on:
@@ -296,7 +325,9 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         title="Pool Pump Manager Warnung",
                         notification_id=f"{DOMAIN}_pump_warning",
                     )
-                    _LOGGER.warning("Pool pump warning: switch ON but power < %s W", WARNING_POWER_THRESHOLD)
+                    _LOGGER.warning(
+                        "Pool pump warning: switch ON but power < %s W", WARNING_POWER_THRESHOLD
+                    )
         else:
             self._low_power_since = None
             if not pump_on:
@@ -324,7 +355,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self._set_pump(False)
                     pump_on = False
 
-        # Status string
+        # Status
         if not self._automation_enabled:
             status = "manual"
         elif now < window_start:
@@ -336,23 +367,36 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             status = "scheduled"
 
-        # Efficiency
         target = self.target_runtime_hours
         efficiency = round(min(100.0, (self._runtime_today / target * 100)), 1) if target > 0 else 0.0
 
         await self._async_persist()
 
         return {
+            # Core
             "runtime_today": self.runtime_today,
             "target_runtime": target,
             "remaining_runtime": self.remaining_runtime,
             "pump_is_on": pump_on,
-            "current_power": power,
             "warning": self._warning_active,
             "automation_enabled": self._automation_enabled,
             "efficiency": efficiency,
             "next_start": self._next_start(now),
             "status": status,
+            # Metering values
+            "metering_power": power,
+            "metering_energy": self._get_metering_value(self.energy_sensor_entity),
+            "metering_voltage": self._get_metering_value(self.voltage_sensor_entity),
+            "metering_current": self._get_metering_value(self.current_sensor_entity),
+            "metering_frequency": self._get_metering_value(self.frequency_sensor_entity),
+            # Metering source info (for diagnostics)
+            "metering_sources": {
+                "power": self.power_sensor_entity,
+                "energy": self.energy_sensor_entity,
+                "voltage": self.voltage_sensor_entity,
+                "current": self.current_sensor_entity,
+                "frequency": self.frequency_sensor_entity,
+            },
         }
 
     # ------------------------------------------------------------------ #

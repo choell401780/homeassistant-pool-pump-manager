@@ -2,15 +2,31 @@
   "config": {
     "step": {
       "user": {
-        "title": "Pool Pump Manager – Devices",
-        "description": "Select the pump switch and optionally a power sensor.",
+        "title": "Pool Pump Manager – Pump Switch",
+        "description": "Select the pool pump switch. In the next step, associated metering sensors will be auto-discovered.",
         "data": {
-          "pump_switch": "Pump Switch",
-          "power_sensor": "Power Sensor (optional)"
+          "pump_switch": "Pump Switch"
         },
         "data_description": {
-          "pump_switch": "Switch entity of the pool pump (e.g. switch.pool_pump)",
-          "power_sensor": "Sensor reporting current power consumption in Watts"
+          "pump_switch": "Switch entity of the pool pump (e.g. switch.pool_pump)"
+        }
+      },
+      "sensors": {
+        "title": "Assign Metering Sensors",
+        "description": "The integration automatically searched for metering sensors belonging to **{pump_switch}**. Review the assignments and adjust if needed. All fields are optional.",
+        "data": {
+          "power_sensor": "Power Sensor (W / kW)",
+          "energy_sensor_entity": "Energy Counter (Wh / kWh)",
+          "voltage_sensor_entity": "Voltage Sensor (V)",
+          "current_sensor_entity": "Current Sensor (A)",
+          "frequency_sensor_entity": "Frequency Sensor (Hz)"
+        },
+        "data_description": {
+          "power_sensor": "Current power draw of the pump",
+          "energy_sensor_entity": "Total energy consumption (kWh / Wh)",
+          "voltage_sensor_entity": "Mains voltage at the pump",
+          "current_sensor_entity": "Current draw of the pump",
+          "frequency_sensor_entity": "Mains frequency"
         }
       },
       "pool": {
@@ -46,6 +62,17 @@
           "circulations_per_day": "Circulations per Day",
           "start_time": "Start Time",
           "end_time": "End Time"
+        }
+      },
+      "sensors": {
+        "title": "Adjust Metering Sensors",
+        "description": "Assign metering sensors to the pump. All fields are optional.",
+        "data": {
+          "power_sensor": "Power Sensor (W / kW)",
+          "energy_sensor_entity": "Energy Counter (Wh / kWh)",
+          "voltage_sensor_entity": "Voltage Sensor (V)",
+          "current_sensor_entity": "Current Sensor (A)",
+          "frequency_sensor_entity": "Frequency Sensor (Hz)"
         }
       }
     },
@@ -90,6 +117,21 @@
       },
       "remaining_runtime": {
         "name": "Remaining Runtime"
+      },
+      "metering_power": {
+        "name": "Power"
+      },
+      "metering_energy": {
+        "name": "Energy"
+      },
+      "metering_voltage": {
+        "name": "Voltage"
+      },
+      "metering_current": {
+        "name": "Current"
+      },
+      "metering_frequency": {
+        "name": "Frequency"
       }
     },
     "binary_sensor": {

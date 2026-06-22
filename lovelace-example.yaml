@@ -9,10 +9,9 @@ views:
           - type: markdown
             content: >
               # 🏊 Pool Pump Manager
-              Intelligente Steuerung der Poolpumpe auf Basis von Poolvolumen und
-              gewünschter Umwälzrate.
+              Intelligente Steuerung der Poolpumpe mit Messwertüberwachung.
 
-          # ── Automatiik & Schalter ───────────────────────────────────────
+          # ── Automatik & Status ──────────────────────────────────────────
           - type: horizontal-stack
             cards:
               - type: tile
@@ -29,20 +28,44 @@ views:
                 icon: mdi:pump
                 color: blue
 
-          # ── Status & Warnung ────────────────────────────────────────────
+              - type: tile
+                entity: binary_sensor.pool_pump_manager_warning
+                name: Warnung
+                icon: mdi:alert-circle
+                color: red
+
+          # ── Status & Nächster Start ─────────────────────────────────────
           - type: horizontal-stack
             cards:
               - type: tile
                 entity: sensor.pool_pump_manager_status
                 name: Status
                 icon: mdi:pool
-                color: teal
 
               - type: tile
-                entity: binary_sensor.pool_pump_manager_warning
-                name: Warnung
-                icon: mdi:alert-circle
-                color: red
+                entity: sensor.pool_pump_manager_next_start
+                name: Nächster Start
+                icon: mdi:clock-start
+
+          # ── Messwerte (HM-ES-PMSw1-Pl-DN-R1) ──────────────────────────
+          - type: entities
+            title: Aktuelle Messwerte
+            entities:
+              - entity: sensor.pool_pump_manager_power
+                name: Leistung
+                icon: mdi:lightning-bolt
+              - entity: sensor.pool_pump_manager_energy
+                name: Energie (Gesamt)
+                icon: mdi:counter
+              - entity: sensor.pool_pump_manager_voltage
+                name: Spannung
+                icon: mdi:sine-wave
+              - entity: sensor.pool_pump_manager_current
+                name: Strom
+                icon: mdi:current-ac
+              - entity: sensor.pool_pump_manager_frequency
+                name: Frequenz
+                icon: mdi:waveform
 
           # ── Laufzeiten ──────────────────────────────────────────────────
           - type: entities
@@ -76,19 +99,25 @@ views:
                   yellow: 50
                   red: 0
 
-              - type: stat-graph
-                title: Laufzeit heute (24h)
-                entities:
-                  - sensor.pool_pump_manager_runtime_today
-                hours_to_show: 24
-                stat_types:
-                  - max
+              - type: gauge
+                entity: sensor.pool_pump_manager_power
+                name: Leistung
+                min: 0
+                max: 800
+                unit: W
+                needle: true
+                severity:
+                  green: 400
+                  yellow: 600
+                  red: 700
 
-          # ── Nächster Start ──────────────────────────────────────────────
-          - type: tile
-            entity: sensor.pool_pump_manager_next_start
-            name: Nächster automatischer Start
-            icon: mdi:clock-start
+          # ── Verlauf Leistung ────────────────────────────────────────────
+          - type: history-graph
+            title: Leistung (24h)
+            hours_to_show: 24
+            entities:
+              - entity: sensor.pool_pump_manager_power
+                name: Leistung
 
           # ── Aktionen ────────────────────────────────────────────────────
           - type: entities

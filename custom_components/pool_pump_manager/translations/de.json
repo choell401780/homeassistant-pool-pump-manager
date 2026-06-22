@@ -2,15 +2,31 @@
   "config": {
     "step": {
       "user": {
-        "title": "Pool Pump Manager – Geräte",
-        "description": "Wähle den Pumpenschalter und optional den Leistungssensor.",
+        "title": "Pool Pump Manager – Pumpenschalter",
+        "description": "Wähle den Schalter der Poolpumpe. Im nächsten Schritt werden zugehörige Messsensoren automatisch erkannt.",
         "data": {
-          "pump_switch": "Pumpenschalter",
-          "power_sensor": "Leistungssensor (optional)"
+          "pump_switch": "Pumpenschalter"
         },
         "data_description": {
-          "pump_switch": "Schalter-Entity der Poolpumpe (z. B. switch.poolpumpe)",
-          "power_sensor": "Sensor der aktuellen Leistungsaufnahme in Watt"
+          "pump_switch": "Schalter-Entity der Poolpumpe (z. B. switch.poolpumpe)"
+        }
+      },
+      "sensors": {
+        "title": "Messsensoren zuordnen",
+        "description": "Die Integration hat automatisch Messsensoren für **{pump_switch}** gesucht. Überprüfe die Zuordnung und korrigiere sie bei Bedarf. Alle Felder sind optional.",
+        "data": {
+          "power_sensor": "Leistungssensor (W / kW)",
+          "energy_sensor_entity": "Energiezähler (Wh / kWh)",
+          "voltage_sensor_entity": "Spannungssensor (V)",
+          "current_sensor_entity": "Stromsensor (A)",
+          "frequency_sensor_entity": "Frequenzsensor (Hz)"
+        },
+        "data_description": {
+          "power_sensor": "Aktuelle Leistungsaufnahme der Pumpe",
+          "energy_sensor_entity": "Gesamtenergieverbrauch (kWh / Wh)",
+          "voltage_sensor_entity": "Netzspannung an der Pumpe",
+          "current_sensor_entity": "Stromaufnahme der Pumpe",
+          "frequency_sensor_entity": "Netzfrequenz"
         }
       },
       "pool": {
@@ -46,6 +62,17 @@
           "circulations_per_day": "Umwälzungen pro Tag",
           "start_time": "Startzeit",
           "end_time": "Endzeit"
+        }
+      },
+      "sensors": {
+        "title": "Messsensoren anpassen",
+        "description": "Weise die Messsensoren der Pumpe zu. Alle Felder sind optional.",
+        "data": {
+          "power_sensor": "Leistungssensor (W / kW)",
+          "energy_sensor_entity": "Energiezähler (Wh / kWh)",
+          "voltage_sensor_entity": "Spannungssensor (V)",
+          "current_sensor_entity": "Stromsensor (A)",
+          "frequency_sensor_entity": "Frequenzsensor (Hz)"
         }
       }
     },
@@ -90,6 +117,21 @@
       },
       "remaining_runtime": {
         "name": "Restlaufzeit"
+      },
+      "metering_power": {
+        "name": "Leistung"
+      },
+      "metering_energy": {
+        "name": "Energie"
+      },
+      "metering_voltage": {
+        "name": "Spannung"
+      },
+      "metering_current": {
+        "name": "Strom"
+      },
+      "metering_frequency": {
+        "name": "Frequenz"
       }
     },
     "binary_sensor": {
