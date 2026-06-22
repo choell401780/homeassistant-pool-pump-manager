@@ -1,0 +1,104 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pool Pump Manager – Devices",
+        "description": "Select the pump switch and optionally a power sensor.",
+        "data": {
+          "pump_switch": "Pump Switch",
+          "power_sensor": "Power Sensor (optional)"
+        },
+        "data_description": {
+          "pump_switch": "Switch entity of the pool pump (e.g. switch.pool_pump)",
+          "power_sensor": "Sensor reporting current power consumption in Watts"
+        }
+      },
+      "pool": {
+        "title": "Pool Parameters",
+        "description": "Configure pool volume, pump capacity and operating times.",
+        "data": {
+          "pool_volume": "Pool Volume (m³)",
+          "pump_flow_rate": "Pump Flow Rate (m³/h)",
+          "water_temperature": "Water Temperature (°C)",
+          "circulations_per_day": "Circulations per Day",
+          "start_time": "Start Time",
+          "end_time": "End Time"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entity not found – please check the entity ID.",
+      "end_before_start": "End time must be after start time.",
+      "required": "This field is required."
+    },
+    "abort": {
+      "already_configured": "This pump is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust Pool Parameters",
+        "data": {
+          "pool_volume": "Pool Volume (m³)",
+          "pump_flow_rate": "Pump Flow Rate (m³/h)",
+          "water_temperature": "Water Temperature (°C)",
+          "circulations_per_day": "Circulations per Day",
+          "start_time": "Start Time",
+          "end_time": "End Time"
+        }
+      }
+    },
+    "error": {
+      "end_before_start": "End time must be after start time."
+    }
+  },
+  "entity": {
+    "switch": {
+      "automation_enabled": {
+        "name": "Automation"
+      }
+    },
+    "number": {
+      "daily_runtime_hours": {
+        "name": "Daily Runtime (Target)"
+      }
+    },
+    "sensor": {
+      "runtime_today": {
+        "name": "Runtime Today"
+      },
+      "target_runtime": {
+        "name": "Target Runtime"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "manual": "Manual",
+          "waiting": "Waiting",
+          "running": "Running",
+          "scheduled": "Scheduled",
+          "completed": "Completed",
+          "unknown": "Unknown"
+        }
+      },
+      "efficiency": {
+        "name": "Efficiency"
+      },
+      "next_start": {
+        "name": "Next Start"
+      },
+      "remaining_runtime": {
+        "name": "Remaining Runtime"
+      }
+    },
+    "binary_sensor": {
+      "running": {
+        "name": "Pump Running"
+      },
+      "warning": {
+        "name": "Warning"
+      }
+    }
+  }
+}

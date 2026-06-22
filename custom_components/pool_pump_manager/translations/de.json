@@ -1,0 +1,104 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pool Pump Manager – Geräte",
+        "description": "Wähle den Pumpenschalter und optional den Leistungssensor.",
+        "data": {
+          "pump_switch": "Pumpenschalter",
+          "power_sensor": "Leistungssensor (optional)"
+        },
+        "data_description": {
+          "pump_switch": "Schalter-Entity der Poolpumpe (z. B. switch.poolpumpe)",
+          "power_sensor": "Sensor der aktuellen Leistungsaufnahme in Watt"
+        }
+      },
+      "pool": {
+        "title": "Pool-Parameter",
+        "description": "Konfiguriere Poolvolumen, Pumpenleistung und Betriebszeiten.",
+        "data": {
+          "pool_volume": "Poolvolumen (m³)",
+          "pump_flow_rate": "Förderleistung der Pumpe (m³/h)",
+          "water_temperature": "Wassertemperatur (°C)",
+          "circulations_per_day": "Umwälzungen pro Tag",
+          "start_time": "Startzeit",
+          "end_time": "Endzeit"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entity nicht gefunden – bitte prüfe den Entity-Namen.",
+      "end_before_start": "Endzeit muss nach der Startzeit liegen.",
+      "required": "Dieses Feld ist Pflichtfeld."
+    },
+    "abort": {
+      "already_configured": "Diese Pumpe ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pool-Parameter anpassen",
+        "data": {
+          "pool_volume": "Poolvolumen (m³)",
+          "pump_flow_rate": "Förderleistung der Pumpe (m³/h)",
+          "water_temperature": "Wassertemperatur (°C)",
+          "circulations_per_day": "Umwälzungen pro Tag",
+          "start_time": "Startzeit",
+          "end_time": "Endzeit"
+        }
+      }
+    },
+    "error": {
+      "end_before_start": "Endzeit muss nach der Startzeit liegen."
+    }
+  },
+  "entity": {
+    "switch": {
+      "automation_enabled": {
+        "name": "Automatik"
+      }
+    },
+    "number": {
+      "daily_runtime_hours": {
+        "name": "Tages-Laufzeit (Ziel)"
+      }
+    },
+    "sensor": {
+      "runtime_today": {
+        "name": "Laufzeit heute"
+      },
+      "target_runtime": {
+        "name": "Ziel-Laufzeit"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "manual": "Manuell",
+          "waiting": "Wartet",
+          "running": "Läuft",
+          "scheduled": "Geplant",
+          "completed": "Abgeschlossen",
+          "unknown": "Unbekannt"
+        }
+      },
+      "efficiency": {
+        "name": "Effizienz"
+      },
+      "next_start": {
+        "name": "Nächster Start"
+      },
+      "remaining_runtime": {
+        "name": "Restlaufzeit"
+      }
+    },
+    "binary_sensor": {
+      "running": {
+        "name": "Pumpe läuft"
+      },
+      "warning": {
+        "name": "Warnung"
+      }
+    }
+  }
+}

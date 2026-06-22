@@ -1,0 +1,120 @@
+title: Pool Management
+views:
+  - title: Pool
+    icon: mdi:pool
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── Header ──────────────────────────────────────────────────────
+          - type: markdown
+            content: >
+              # 🏊 Pool Pump Manager
+              Intelligente Steuerung der Poolpumpe auf Basis von Poolvolumen und
+              gewünschter Umwälzrate.
+
+          # ── Automatiik & Schalter ───────────────────────────────────────
+          - type: horizontal-stack
+            cards:
+              - type: tile
+                entity: switch.pool_pump_manager_automation_enabled
+                name: Automatik
+                icon: mdi:robot
+                color: green
+                tap_action:
+                  action: toggle
+
+              - type: tile
+                entity: binary_sensor.pool_pump_manager_running
+                name: Pumpe läuft
+                icon: mdi:pump
+                color: blue
+
+          # ── Status & Warnung ────────────────────────────────────────────
+          - type: horizontal-stack
+            cards:
+              - type: tile
+                entity: sensor.pool_pump_manager_status
+                name: Status
+                icon: mdi:pool
+                color: teal
+
+              - type: tile
+                entity: binary_sensor.pool_pump_manager_warning
+                name: Warnung
+                icon: mdi:alert-circle
+                color: red
+
+          # ── Laufzeiten ──────────────────────────────────────────────────
+          - type: entities
+            title: Laufzeiten
+            entities:
+              - entity: sensor.pool_pump_manager_runtime_today
+                name: Laufzeit heute
+                icon: mdi:timer-outline
+              - entity: sensor.pool_pump_manager_target_runtime
+                name: Ziel-Laufzeit
+                icon: mdi:target
+              - entity: sensor.pool_pump_manager_remaining_runtime
+                name: Restlaufzeit
+                icon: mdi:timer-sand
+              - entity: number.pool_pump_manager_daily_runtime_hours
+                name: Laufzeit manuell überschreiben
+                icon: mdi:timer-cog-outline
+
+          # ── Statistik ───────────────────────────────────────────────────
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.pool_pump_manager_efficiency
+                name: Tageseffizienz
+                min: 0
+                max: 100
+                unit: "%"
+                needle: true
+                severity:
+                  green: 80
+                  yellow: 50
+                  red: 0
+
+              - type: stat-graph
+                title: Laufzeit heute (24h)
+                entities:
+                  - sensor.pool_pump_manager_runtime_today
+                hours_to_show: 24
+                stat_types:
+                  - max
+
+          # ── Nächster Start ──────────────────────────────────────────────
+          - type: tile
+            entity: sensor.pool_pump_manager_next_start
+            name: Nächster automatischer Start
+            icon: mdi:clock-start
+
+          # ── Aktionen ────────────────────────────────────────────────────
+          - type: entities
+            title: Aktionen
+            entities:
+              - type: button
+                name: Jetzt starten
+                icon: mdi:play-circle
+                tap_action:
+                  action: perform-action
+                  perform_action: pool_pump_manager.start_now
+              - type: button
+                name: Jetzt stoppen
+                icon: mdi:stop-circle
+                tap_action:
+                  action: perform-action
+                  perform_action: pool_pump_manager.stop_now
+              - type: button
+                name: Laufzeit zurücksetzen
+                icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: pool_pump_manager.reset_runtime_today
+              - type: button
+                name: Zeitplan neu berechnen
+                icon: mdi:calculator
+                tap_action:
+                  action: perform-action
+                  perform_action: pool_pump_manager.force_recalculate

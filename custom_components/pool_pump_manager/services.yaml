@@ -1,0 +1,15 @@
+start_now:
+  name: Start Pump Now
+  description: Start the pool pump immediately, regardless of the current schedule.
+
+stop_now:
+  name: Stop Pump Now
+  description: Stop the pool pump immediately.
+
+reset_runtime_today:
+  name: Reset Daily Runtime
+  description: Reset the tracked runtime counter for today back to zero.
+
+force_recalculate:
+  name: Force Recalculate
+  description: Force recalculation of the pump schedule (e.g. after changing pool parameters).

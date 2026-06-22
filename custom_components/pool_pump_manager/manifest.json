@@ -1,0 +1,12 @@
+{
+  "domain": "pool_pump_manager",
+  "name": "Pool Pump Manager",
+  "version": "0.1.0",
+  "documentation": "https://github.com/choell401780/homeassistant-pool-pump-manager",
+  "issue_tracker": "https://github.com/choell401780/homeassistant-pool-pump-manager/issues",
+  "dependencies": [],
+  "codeowners": ["@choell401780"],
+  "requirements": [],
+  "iot_class": "local_polling",
+  "config_flow": true
+}
