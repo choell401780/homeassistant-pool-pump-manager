@@ -33,6 +33,9 @@ from .const import (
     WARNING_DELAY_SECONDS,
     STORAGE_VERSION,
     UPDATE_INTERVAL_SECONDS,
+    SEASON_MODE_AUTO,
+    SEASON_CIRCULATIONS,
+    MONTH_TO_SEASON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,7 +48,7 @@ def _parse_time_str(time_str: str) -> tuple[int, int]:
 
 
 class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Manages pool pump automation and state tracking."""
+    """Manages pool pump automation, season mode and runtime tracking."""
 
     def __init__(self, hass: HomeAssistant, entry: Any) -> None:
         super().__init__(
@@ -57,19 +60,32 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._entry = entry
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
 
+        # Daily runtime
         self._runtime_today: float = 0.0
         self._tracking_date: date | None = None
         self._pump_active_since: datetime | None = None
 
+        # Lifetime / maintenance counters
+        self._total_runtime: float = 0.0
+        self._season_runtime: float = 0.0
+        self._runtime_since_maintenance: float = 0.0
+
+        # Warning
         self._low_power_since: datetime | None = None
         self._warning_active: bool = False
 
+        # Automation
         self._automation_enabled: bool = True
         self._manual_override: bool = False
 
+        # Schedule
         self._schedule: list[tuple[datetime, datetime]] = []
         self._schedule_date: date | None = None
 
+        # Season
+        self._season_mode: str = SEASON_MODE_AUTO
+
+        # Manual runtime override
         self._manual_runtime_hours: float | None = None
 
     # ------------------------------------------------------------------ #
@@ -77,11 +93,9 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------ #
 
     def _opt(self, key: str, default: Any = None) -> Any:
-        """Return value from options first, falling back to data, then default."""
         return self._entry.options.get(key, self._entry.data.get(key, default))
 
     def _opt_entity(self, key: str) -> str | None:
-        """Return optional entity_id or None for empty / unset."""
         val = self._opt(key)
         return val if val else None
 
@@ -133,11 +147,37 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def end_time_str(self) -> str:
         return self._opt(CONF_END_TIME, DEFAULT_END_TIME)
 
+    # ------------------------------------------------------------------ #
+    # Season mode                                                          #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def season_mode(self) -> str:
+        return self._season_mode
+
+    def _get_auto_season(self) -> str:
+        return MONTH_TO_SEASON.get(dt_util.now().month, "summer")
+
+    def get_effective_season(self) -> str:
+        """Return the actually active season (resolving 'auto')."""
+        if self._season_mode == SEASON_MODE_AUTO:
+            return self._get_auto_season()
+        return self._season_mode
+
+    @property
+    def effective_circulations(self) -> float:
+        """Circulations per day taking season into account."""
+        return SEASON_CIRCULATIONS.get(self.get_effective_season(), self.circulations_per_day)
+
+    # ------------------------------------------------------------------ #
+    # Runtime properties                                                   #
+    # ------------------------------------------------------------------ #
+
     @property
     def target_runtime_hours(self) -> float:
         if self._manual_runtime_hours is not None:
             return self._manual_runtime_hours
-        return round(self.pool_volume * self.circulations_per_day / self.pump_flow_rate, 2)
+        return round(self.pool_volume * self.effective_circulations / self.pump_flow_rate, 2)
 
     @property
     def runtime_today(self) -> float:
@@ -148,6 +188,18 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return max(0.0, round(self.target_runtime_hours - self._runtime_today, 3))
 
     @property
+    def total_runtime(self) -> float:
+        return round(self._total_runtime, 3)
+
+    @property
+    def season_runtime(self) -> float:
+        return round(self._season_runtime, 3)
+
+    @property
+    def runtime_since_maintenance(self) -> float:
+        return round(self._runtime_since_maintenance, 3)
+
+    @property
     def automation_enabled(self) -> bool:
         return self._automation_enabled
 
@@ -155,16 +207,11 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def warning_active(self) -> bool:
         return self._warning_active
 
-    @property
-    def schedule(self) -> list[tuple[datetime, datetime]]:
-        return self._schedule
-
     # ------------------------------------------------------------------ #
     # Persistence                                                          #
     # ------------------------------------------------------------------ #
 
     async def async_setup(self) -> None:
-        """Load persisted state on startup."""
         stored = await self._store.async_load()
         if not stored:
             return
@@ -177,9 +224,15 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._tracking_date = stored_date
             except (ValueError, TypeError):
                 pass
+
         self._automation_enabled = bool(stored.get("automation_enabled", True))
         manual = stored.get("manual_runtime_hours")
         self._manual_runtime_hours = float(manual) if manual is not None else None
+
+        self._season_mode = stored.get("season_mode", SEASON_MODE_AUTO)
+        self._total_runtime = float(stored.get("total_runtime", 0.0))
+        self._season_runtime = float(stored.get("season_runtime", 0.0))
+        self._runtime_since_maintenance = float(stored.get("runtime_since_maintenance", 0.0))
 
     async def _async_persist(self) -> None:
         await self._store.async_save(
@@ -188,6 +241,10 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "runtime_today": self._runtime_today,
                 "automation_enabled": self._automation_enabled,
                 "manual_runtime_hours": self._manual_runtime_hours,
+                "season_mode": self._season_mode,
+                "total_runtime": self._total_runtime,
+                "season_runtime": self._season_runtime,
+                "runtime_since_maintenance": self._runtime_since_maintenance,
             }
         )
 
@@ -200,7 +257,6 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return state is not None and state.state == "on"
 
     def _get_metering_value(self, entity_id: str | None) -> float | None:
-        """Read a numeric state from an optional entity."""
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)
@@ -212,7 +268,6 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
 
     def _window_times(self, now: datetime) -> tuple[datetime, datetime]:
-        """Return today's operating window as aware datetimes."""
         tz = now.tzinfo
         today = now.date()
         sh, sm = _parse_time_str(self.start_time_str)
@@ -247,7 +302,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         slots: list[tuple[datetime, datetime]] = []
         current = window_start
-        for i in range(n):
+        for _ in range(n):
             seg_end = current + timedelta(hours=hours_per_segment)
             if seg_end > window_end:
                 seg_end = window_end
@@ -296,18 +351,20 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._schedule_date != today:
             self._schedule = self._calculate_schedule(now)
             self._schedule_date = today
-            _LOGGER.debug("Recalculated schedule for %s: %s", today, self._schedule)
 
         pump_on = self._is_pump_on()
         power = self._get_metering_value(self.power_sensor_entity)
 
-        # Runtime tracking
+        # Runtime tracking (daily + lifetime counters)
         if pump_on:
             if self._pump_active_since is None:
                 self._pump_active_since = now
             else:
                 elapsed_h = (now - self._pump_active_since).total_seconds() / 3600
                 self._runtime_today += elapsed_h
+                self._total_runtime += elapsed_h
+                self._season_runtime += elapsed_h
+                self._runtime_since_maintenance += elapsed_h
                 self._pump_active_since = now
         else:
             self._pump_active_since = None
@@ -325,9 +382,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         title="Pool Pump Manager Warnung",
                         notification_id=f"{DOMAIN}_pump_warning",
                     )
-                    _LOGGER.warning(
-                        "Pool pump warning: switch ON but power < %s W", WARNING_POWER_THRESHOLD
-                    )
+                    _LOGGER.warning("Pool pump warning: switch ON but power < %s W", WARNING_POWER_THRESHOLD)
         else:
             self._low_power_since = None
             if not pump_on:
@@ -347,7 +402,6 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 in_window = window_start <= now < window_end
                 should_run = in_window and self._slot_active(now) and not target_reached
-
                 if should_run and not pump_on:
                     await self._set_pump(True)
                     pump_on = True
@@ -372,6 +426,8 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         await self._async_persist()
 
+        effective_season = self.get_effective_season()
+
         return {
             # Core
             "runtime_today": self.runtime_today,
@@ -383,13 +439,21 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "efficiency": efficiency,
             "next_start": self._next_start(now),
             "status": status,
+            # Season
+            "season_mode": self._season_mode,
+            "effective_season": effective_season,
+            "seasonal_circulations": self.effective_circulations,
+            # Maintenance / lifetime counters
+            "total_runtime": self.total_runtime,
+            "season_runtime": self.season_runtime,
+            "runtime_since_maintenance": self.runtime_since_maintenance,
             # Metering values
             "metering_power": power,
             "metering_energy": self._get_metering_value(self.energy_sensor_entity),
             "metering_voltage": self._get_metering_value(self.voltage_sensor_entity),
             "metering_current": self._get_metering_value(self.current_sensor_entity),
             "metering_frequency": self._get_metering_value(self.frequency_sensor_entity),
-            # Metering source info (for diagnostics)
+            # Metering source info (diagnostics)
             "metering_sources": {
                 "power": self.power_sensor_entity,
                 "energy": self.energy_sensor_entity,
@@ -424,6 +488,12 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._async_persist()
         await self.async_refresh()
 
+    async def async_set_season_mode(self, mode: str) -> None:
+        self._season_mode = mode
+        self._schedule_date = None  # force schedule recalc with new circulations
+        await self._async_persist()
+        await self.async_refresh()
+
     async def async_start_now(self) -> None:
         self._manual_override = True
         await self._set_pump(True)
@@ -443,6 +513,16 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_force_recalculate(self) -> None:
         self._schedule_date = None
+        await self.async_refresh()
+
+    async def async_reset_maintenance(self) -> None:
+        self._runtime_since_maintenance = 0.0
+        await self._async_persist()
+        await self.async_refresh()
+
+    async def async_reset_season(self) -> None:
+        self._season_runtime = 0.0
+        await self._async_persist()
         await self.async_refresh()
 
     def set_manual_runtime(self, hours: float | None) -> None:

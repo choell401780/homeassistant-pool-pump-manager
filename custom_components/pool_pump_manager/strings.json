@@ -13,20 +13,13 @@
       },
       "sensors": {
         "title": "Messsensoren zuordnen",
-        "description": "Die Integration hat automatisch Messsensoren für **{pump_switch}** gesucht. Überprüfe die Zuordnung und korrigiere sie bei Bedarf. Alle Felder sind optional.",
+        "description": "Die Integration hat automatisch Messsensoren für **{pump_switch}** gesucht. Alle Felder sind optional.",
         "data": {
           "power_sensor": "Leistungssensor (W / kW)",
           "energy_sensor_entity": "Energiezähler (Wh / kWh)",
           "voltage_sensor_entity": "Spannungssensor (V)",
           "current_sensor_entity": "Stromsensor (A)",
           "frequency_sensor_entity": "Frequenzsensor (Hz)"
-        },
-        "data_description": {
-          "power_sensor": "Aktuelle Leistungsaufnahme der Pumpe",
-          "energy_sensor_entity": "Gesamtenergieverbrauch (kWh / Wh)",
-          "voltage_sensor_entity": "Netzspannung an der Pumpe",
-          "current_sensor_entity": "Stromaufnahme der Pumpe",
-          "frequency_sensor_entity": "Netzfrequenz"
         }
       },
       "pool": {
@@ -36,7 +29,7 @@
           "pool_volume": "Poolvolumen (m³)",
           "pump_flow_rate": "Förderleistung der Pumpe (m³/h)",
           "water_temperature": "Wassertemperatur (°C)",
-          "circulations_per_day": "Umwälzungen pro Tag",
+          "circulations_per_day": "Umwälzungen pro Tag (Basis)",
           "start_time": "Startzeit",
           "end_time": "Endzeit"
         }
@@ -59,14 +52,13 @@
           "pool_volume": "Poolvolumen (m³)",
           "pump_flow_rate": "Förderleistung der Pumpe (m³/h)",
           "water_temperature": "Wassertemperatur (°C)",
-          "circulations_per_day": "Umwälzungen pro Tag",
+          "circulations_per_day": "Umwälzungen pro Tag (Basis)",
           "start_time": "Startzeit",
           "end_time": "Endzeit"
         }
       },
       "sensors": {
         "title": "Messsensoren anpassen",
-        "description": "Weise die Messsensoren der Pumpe zu. Alle Felder sind optional.",
         "data": {
           "power_sensor": "Leistungssensor (W / kW)",
           "energy_sensor_entity": "Energiezähler (Wh / kWh)",
@@ -82,22 +74,30 @@
   },
   "entity": {
     "switch": {
-      "automation_enabled": {
-        "name": "Automatik"
+      "automation_enabled": { "name": "Automatik" }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Saisonmodus",
+        "state": {
+          "auto": "Automatisch",
+          "spring": "Frühling",
+          "summer": "Sommer",
+          "autumn": "Herbst",
+          "winter": "Winter"
+        }
       }
+    },
+    "button": {
+      "reset_maintenance": { "name": "Wartungszähler zurücksetzen" },
+      "reset_season": { "name": "Saisonzähler zurücksetzen" }
     },
     "number": {
-      "daily_runtime_hours": {
-        "name": "Tages-Laufzeit (Ziel)"
-      }
+      "daily_runtime_hours": { "name": "Tages-Laufzeit (Ziel)" }
     },
     "sensor": {
-      "runtime_today": {
-        "name": "Laufzeit heute"
-      },
-      "target_runtime": {
-        "name": "Ziel-Laufzeit"
-      },
+      "runtime_today": { "name": "Laufzeit heute" },
+      "target_runtime": { "name": "Ziel-Laufzeit" },
       "status": {
         "name": "Status",
         "state": {
@@ -109,38 +109,24 @@
           "unknown": "Unbekannt"
         }
       },
-      "efficiency": {
-        "name": "Effizienz"
-      },
-      "next_start": {
-        "name": "Nächster Start"
-      },
-      "remaining_runtime": {
-        "name": "Restlaufzeit"
-      },
-      "metering_power": {
-        "name": "Leistung"
-      },
-      "metering_energy": {
-        "name": "Energie"
-      },
-      "metering_voltage": {
-        "name": "Spannung"
-      },
-      "metering_current": {
-        "name": "Strom"
-      },
-      "metering_frequency": {
-        "name": "Frequenz"
-      }
+      "efficiency": { "name": "Effizienz" },
+      "next_start": { "name": "Nächster Start" },
+      "remaining_runtime": { "name": "Restlaufzeit" },
+      "total_runtime": { "name": "Gesamtlaufzeit" },
+      "season_runtime": { "name": "Saisonlaufzeit" },
+      "runtime_since_maintenance": { "name": "Laufzeit seit Wartung" },
+      "metering_power": { "name": "Leistung" },
+      "metering_energy": { "name": "Energie" },
+      "metering_voltage": { "name": "Spannung" },
+      "metering_current": { "name": "Strom" },
+      "metering_frequency": { "name": "Frequenz" },
+      "ph": { "name": "pH-Wert" },
+      "redox": { "name": "Redox-Potential" },
+      "pool_temperature": { "name": "Wassertemperatur" }
     },
     "binary_sensor": {
-      "running": {
-        "name": "Pumpe läuft"
-      },
-      "warning": {
-        "name": "Warnung"
-      }
+      "running": { "name": "Pumpe läuft" },
+      "warning": { "name": "Warnung" }
     }
   }
 }

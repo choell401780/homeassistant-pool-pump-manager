@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -17,7 +18,35 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.SELECT,
+    Platform.BUTTON,
 ]
+
+_FRONTEND_REGISTERED = False
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register frontend resource once per HA start."""
+    global _FRONTEND_REGISTERED
+    if not _FRONTEND_REGISTERED:
+        www_path = Path(__file__).parent / "www"
+        if www_path.is_dir():
+            try:
+                from homeassistant.components.http import StaticPathConfig
+
+                await hass.http.async_register_static_paths(
+                    [StaticPathConfig("/pool_pump_manager_frontend", str(www_path), False)]
+                )
+                from homeassistant.components.frontend import add_extra_js_url
+
+                add_extra_js_url(
+                    hass, "/pool_pump_manager_frontend/pool-control-center.js"
+                )
+                _LOGGER.info("Pool Pump Manager: registered frontend card")
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Could not register Pool Control Center card: %s", err)
+        _FRONTEND_REGISTERED = True
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

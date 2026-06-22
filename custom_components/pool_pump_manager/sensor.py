@@ -22,14 +22,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    DOMAIN,
-    CONF_POWER_SENSOR,
-    CONF_ENERGY_SENSOR,
-    CONF_VOLTAGE_SENSOR,
-    CONF_CURRENT_SENSOR,
-    CONF_FREQUENCY_SENSOR,
-)
+from .const import DOMAIN
 from .coordinator import PoolPumpCoordinator
 from .switch import _device_info
 
@@ -42,19 +35,27 @@ async def async_setup_entry(
     coordinator: PoolPumpCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         [
-            # Runtime / automation sensors
+            # ── Automation sensors ──────────────────────────────────────
             PoolPumpRuntimeTodaySensor(coordinator, entry),
             PoolPumpTargetRuntimeSensor(coordinator, entry),
             PoolPumpStatusSensor(coordinator, entry),
             PoolPumpEfficiencySensor(coordinator, entry),
             PoolPumpNextStartSensor(coordinator, entry),
             PoolPumpRemainingRuntimeSensor(coordinator, entry),
-            # Metering mirror sensors
+            # ── Maintenance / lifetime counters (new v0.3.0) ────────────
+            PoolPumpTotalRuntimeSensor(coordinator, entry),
+            PoolPumpSeasonRuntimeSensor(coordinator, entry),
+            PoolPumpRuntimeSinceMaintenanceSensor(coordinator, entry),
+            # ── Metering mirror sensors (v0.2.0) ────────────────────────
             PoolPumpPowerSensor(coordinator, entry),
             PoolPumpEnergySensor(coordinator, entry),
             PoolPumpVoltageSensor(coordinator, entry),
             PoolPumpCurrentSensor(coordinator, entry),
             PoolPumpFrequencySensor(coordinator, entry),
+            # ── Water quality placeholders (v0.3.0 prepared) ────────────
+            PoolPumpPhSensor(coordinator, entry),
+            PoolPumpRedoxSensor(coordinator, entry),
+            PoolPumpPoolTemperatureSensor(coordinator, entry),
         ]
     )
 
@@ -78,7 +79,7 @@ class _PoolPumpBaseSensor(CoordinatorEntity[PoolPumpCoordinator], SensorEntity):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Runtime / automation sensors (unchanged from v0.1.0)
+# Automation sensors (unchanged from v0.1.0 / v0.2.0)
 # ──────────────────────────────────────────────────────────────────────────────
 
 class PoolPumpRuntimeTodaySensor(_PoolPumpBaseSensor):
@@ -116,7 +117,8 @@ class PoolPumpTargetRuntimeSensor(_PoolPumpBaseSensor):
         return {
             "pool_volume_m3": self.coordinator.pool_volume,
             "pump_flow_rate_m3h": self.coordinator.pump_flow_rate,
-            "circulations_per_day": self.coordinator.circulations_per_day,
+            "circulations_per_day": self.coordinator.effective_circulations,
+            "effective_season": self.coordinator.data.get("effective_season"),
         }
 
 
@@ -133,9 +135,11 @@ class PoolPumpStatusSensor(_PoolPumpBaseSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Diagnostic: which source entities supply each metering value."""
         sources = self.coordinator.data.get("metering_sources", {})
         return {
+            "effective_season": self.coordinator.data.get("effective_season"),
+            "season_mode": self.coordinator.data.get("season_mode"),
+            "seasonal_circulations": self.coordinator.data.get("seasonal_circulations"),
             "metering_power_source": sources.get("power"),
             "metering_energy_source": sources.get("energy"),
             "metering_voltage_source": sources.get("voltage"),
@@ -185,12 +189,60 @@ class PoolPumpRemainingRuntimeSensor(_PoolPumpBaseSensor):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Metering mirror sensors (new in v0.2.0)
+# Maintenance / lifetime counters (new v0.3.0)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class PoolPumpTotalRuntimeSensor(_PoolPumpBaseSensor):
+    _attr_translation_key = "total_runtime"
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = "mdi:timer-play-outline"
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "total_runtime")
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.data.get("total_runtime", 0.0)
+
+
+class PoolPumpSeasonRuntimeSensor(_PoolPumpBaseSensor):
+    _attr_translation_key = "season_runtime"
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "season_runtime")
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.data.get("season_runtime", 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"effective_season": self.coordinator.data.get("effective_season")}
+
+
+class PoolPumpRuntimeSinceMaintenanceSensor(_PoolPumpBaseSensor):
+    _attr_translation_key = "runtime_since_maintenance"
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = "mdi:wrench-clock"
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "runtime_since_maintenance")
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.data.get("runtime_since_maintenance", 0.0)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metering mirror sensors (v0.2.0, unchanged)
 # ──────────────────────────────────────────────────────────────────────────────
 
 class _MeteringSensor(_PoolPumpBaseSensor):
-    """Base for sensors that mirror an external metering entity."""
-
     _metering_key: str
     _source_entity_prop: str
     _fallback_unit: str
@@ -208,7 +260,6 @@ class _MeteringSensor(_PoolPumpBaseSensor):
 
     @property
     def native_unit_of_measurement(self) -> str:
-        """Mirror the unit of the source entity so HA handles conversion correctly."""
         entity_id = getattr(self.coordinator, self._source_entity_prop)
         if entity_id:
             state = self.hass.states.get(entity_id)
@@ -220,8 +271,7 @@ class _MeteringSensor(_PoolPumpBaseSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        entity_id = getattr(self.coordinator, self._source_entity_prop)
-        return {"source_entity": entity_id}
+        return {"source_entity": getattr(self.coordinator, self._source_entity_prop)}
 
 
 class PoolPumpPowerSensor(_MeteringSensor):
@@ -287,3 +337,50 @@ class PoolPumpFrequencySensor(_MeteringSensor):
 
     def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator, entry, "metering_frequency")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Water quality placeholders (new v0.3.0 – unavailable until source configured)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _WaterQualityPlaceholder(_PoolPumpBaseSensor):
+    """Sensor that is unavailable until a source entity is configured in a future version."""
+
+    @property
+    def available(self) -> bool:
+        return False  # placeholder — always unavailable in v0.3.0
+
+    @property
+    def native_value(self) -> None:
+        return None
+
+
+class PoolPumpPhSensor(_WaterQualityPlaceholder):
+    _attr_translation_key = "ph"
+    _attr_icon = "mdi:ph"
+    _attr_native_unit_of_measurement = "pH"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "ph")
+
+
+class PoolPumpRedoxSensor(_WaterQualityPlaceholder):
+    _attr_translation_key = "redox"
+    _attr_icon = "mdi:lightning-bolt-circle"
+    _attr_native_unit_of_measurement = "mV"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "redox")
+
+
+class PoolPumpPoolTemperatureSensor(_WaterQualityPlaceholder):
+    _attr_translation_key = "pool_temperature"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = "°C"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:thermometer-water"
+
+    def __init__(self, coordinator: PoolPumpCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "pool_temperature")

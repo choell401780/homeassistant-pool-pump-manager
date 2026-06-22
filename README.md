@@ -13,9 +13,12 @@ Unterstützt u.a. den **Homematic HM-ES-PMSw1-Pl-DN-R1** mit automatischer Senso
 ## Features
 
 - **Automatische Laufzeitberechnung** auf Basis von Poolvolumen, Förderleistung und Umwälzungen pro Tag
-- **Gleichmäßige Zeitplanung** – die Laufzeit wird automatisch auf mehrere Blöcke im Tagesfenster verteilt
+- **Gleichmäßige Zeitplanung** – Laufzeit wird automatisch auf mehrere Blöcke im Tagesfenster verteilt
 - **Persistente Laufzeitverfolgung** – überlebt Home-Assistant-Neustarts
 - **Automatische Sensor-Erkennung** – Leistung, Energie, Spannung, Strom und Frequenz werden automatisch ermittelt
+- **Saisonmodus** – automatische oder manuelle saisonale Anpassung der Umwälzfrequenz
+- **Wartungs- & Lebenszeitzähler** – Gesamtlaufzeit, Saisonlaufzeit, Laufzeit seit Wartung
+- **Pool Control Center** – professionelles Custom-Lovelace-Dashboard im Dark-Glass-Design mit Pool-Visualisierung
 - **Sicherheitswarnung** – erkennt wenn die Pumpe läuft aber keine Leistung aufnimmt
 - **Vollständige UI-Konfiguration** über den Config Flow (kein YAML erforderlich)
 - **HACS-kompatibel**
@@ -77,30 +80,65 @@ Alle Felder sind optional und können manuell überschrieben oder leer gelassen 
 | Poolvolumen | 64 m³ | Gesamtvolumen des Pools |
 | Förderleistung | 9,5 m³/h | Förderleistung der Pumpe |
 | Wassertemperatur | 24 °C | Aktuelle Wassertemperatur |
-| Umwälzungen/Tag | 1,5 | Gewünschte Umwälzungen pro Tag |
+| Umwälzungen/Tag | 1,5 | Gewünschte Umwälzungen pro Tag (Basis) |
 | Startzeit | 08:00 | Früheste Betriebszeit |
 | Endzeit | 20:00 | Späteste Betriebszeit |
 
 ---
 
-## Sensor-Zuordnung nachträglich ändern
+## Saisonmodus (neu in v0.3.0)
 
-Über **Einstellungen → Integrationen → Pool Pump Manager → Konfigurieren** können alle Parameter und Sensor-Zuordnungen jederzeit angepasst werden (Options Flow, 2 Schritte).
+Der Saisonmodus passt die Umwälzfrequenz automatisch an die Jahreszeit an. Über `select.pool_pump_manager_season_mode` können folgende Modi gewählt werden:
+
+| Modus | Umwälzungen/Tag | Monate (Auto) |
+|-------|----------------|---------------|
+| Automatisch | je nach Jahreszeit | – |
+| Frühling | 1,0 | März – April |
+| Sommer | 1,5 | Mai – August |
+| Herbst | 1,0 | September – Oktober |
+| Winter | 0,5 | November – Februar |
+
+Im Modus **Automatisch** wird die Jahreszeit anhand des aktuellen Monats ermittelt. Die manuelle Überschreibung über `number.pool_pump_manager_daily_runtime_hours` hat weiterhin Vorrang.
 
 ---
 
-## Unterstütztes Gerät: HM-ES-PMSw1-Pl-DN-R1
+## Wartungs- & Lebenszeitzähler (neu in v0.3.0)
 
-Der Homematic Funk-Schalt-Mess-Aktor HM-ES-PMSw1-Pl-DN-R1 stellt folgende Entities bereit, die automatisch erkannt werden:
+Drei persistente Zähler verfolgen die Pumpen-Laufzeit über die gesamte Lebensdauer:
 
-| Messgröße | Typische Entity | Einheit |
-|-----------|----------------|---------|
-| Schalter | `switch.hm_*` | – |
-| Leistung | `sensor.hm_*_power` | W |
-| Energiezähler | `sensor.hm_*_energy_counter` | Wh |
-| Spannung | `sensor.hm_*_voltage` | V |
-| Strom | `sensor.hm_*_current` | A |
-| Frequenz | `sensor.hm_*_frequency` | Hz |
+| Entity | Beschreibung |
+|--------|-------------|
+| `sensor.pool_pump_manager_total_runtime` | Gesamtlaufzeit seit Erstinstallation (Stunden) |
+| `sensor.pool_pump_manager_season_runtime` | Laufzeit der aktuellen Saison (Stunden) |
+| `sensor.pool_pump_manager_runtime_since_maintenance` | Laufzeit seit letzter Wartung (Stunden) |
+
+Die Zähler können über zwei Buttons zurückgesetzt werden:
+
+| Entity | Beschreibung |
+|--------|-------------|
+| `button.pool_pump_manager_reset_maintenance` | Wartungszähler zurücksetzen |
+| `button.pool_pump_manager_reset_season` | Saisonzähler zurücksetzen |
+
+---
+
+## Pool Control Center (neu in v0.3.0)
+
+Die Integration registriert automatisch eine **Custom Lovelace Card** (`pool-control-center-card`) beim HA-Frontend. Die Karte zeigt:
+
+- **Pool-Visualisierung**: SVG-Vogelperspektive mit Pool (oval), Holzdeck, Hecken, Palme
+- **Live-Daten**: alle Messwerte, Laufzeiten, Status in Echtzeit
+- **Steuerung**: Automatik, Start/Stop, Saisonmodus (zyklisch per Klick), Wartungs-Reset
+- **Wasserqualität-Sektion**: Platzhalter für pH, Redox, Temperatur (kommt in zukünftiger Version)
+- **Dark-Glass-Design**: Glassmorphismus, responsiv für Tablet & Mobil
+
+### Einbindung in Lovelace
+
+```yaml
+type: custom:pool-control-center-card
+title: Pool Control Center
+```
+
+Die Card wird **automatisch registriert**, sobald die Integration aktiv ist – kein manuelles Hinzufügen von Ressourcen nötig.
 
 ---
 
@@ -108,7 +146,7 @@ Der Homematic Funk-Schalt-Mess-Aktor HM-ES-PMSw1-Pl-DN-R1 stellt folgende Entiti
 
 ```
 Poolvolumen:      64 m³
-Umwälzungen:      1,5 / Tag
+Umwälzungen:      1,5 / Tag  (Sommer-Modus)
 Förderleistung:   9,5 m³/h
 
 Ziel-Laufzeit = 64 × 1,5 ÷ 9,5 ≈ 10,1 Stunden
@@ -132,11 +170,24 @@ Die Integration verteilt diese 10,1 Stunden gleichmäßig über das Betriebsfens
 |--------|-------------|
 | `switch.pool_pump_manager_automation_enabled` | Automatik ein/aus |
 
+### Select (neu in v0.3.0)
+
+| Entity | Beschreibung |
+|--------|-------------|
+| `select.pool_pump_manager_season_mode` | Saisonmodus (auto/spring/summer/autumn/winter) |
+
 ### Number
 
 | Entity | Beschreibung |
 |--------|-------------|
 | `number.pool_pump_manager_daily_runtime_hours` | Ziel-Laufzeit (manuell überschreibbar) |
+
+### Button (neu in v0.3.0)
+
+| Entity | Beschreibung |
+|--------|-------------|
+| `button.pool_pump_manager_reset_maintenance` | Wartungszähler zurücksetzen |
+| `button.pool_pump_manager_reset_season` | Saisonzähler zurücksetzen |
 
 ### Automation-Sensoren
 
@@ -149,6 +200,14 @@ Die Integration verteilt diese 10,1 Stunden gleichmäßig über das Betriebsfens
 | `sensor.pool_pump_manager_next_start` | Nächster geplanter Start (Zeitstempel) |
 | `sensor.pool_pump_manager_remaining_runtime` | Verbleibende Laufzeit (Stunden) |
 
+### Laufzeitzähler (neu in v0.3.0)
+
+| Entity | Beschreibung |
+|--------|-------------|
+| `sensor.pool_pump_manager_total_runtime` | Gesamtlaufzeit (Stunden) |
+| `sensor.pool_pump_manager_season_runtime` | Saisonlaufzeit (Stunden) |
+| `sensor.pool_pump_manager_runtime_since_maintenance` | Laufzeit seit Wartung (Stunden) |
+
 ### Metering-Sensoren (neu in v0.2.0)
 
 | Entity | Beschreibung | Einheit |
@@ -159,7 +218,15 @@ Die Integration verteilt diese 10,1 Stunden gleichmäßig über das Betriebsfens
 | `sensor.pool_pump_manager_current` | Strom (gespiegelt) | A |
 | `sensor.pool_pump_manager_frequency` | Frequenz (gespiegelt) | Hz |
 
-> Diese Sensoren sind nur verfügbar, wenn eine Quell-Entity zugeordnet wurde.
+### Wasserqualität (Platzhalter – neu in v0.3.0)
+
+| Entity | Beschreibung | Status |
+|--------|-------------|--------|
+| `sensor.pool_pump_manager_ph` | pH-Wert | Nicht konfiguriert |
+| `sensor.pool_pump_manager_redox` | Redox-Potential | Nicht konfiguriert |
+| `sensor.pool_pump_manager_pool_temperature` | Wassertemperatur | Nicht konfiguriert |
+
+> Diese Sensoren zeigen im Zustand "Nicht konfiguriert" – die Konfigurationsmöglichkeit kommt in einer zukünftigen Version.
 
 ### Binary Sensoren
 
@@ -168,17 +235,37 @@ Die Integration verteilt diese 10,1 Stunden gleichmäßig über das Betriebsfens
 | `binary_sensor.pool_pump_manager_running` | Pumpe läuft gerade |
 | `binary_sensor.pool_pump_manager_warning` | Warnung aktiv |
 
-### Diagnoseinformationen
+---
+
+## Diagnoseinformationen
 
 Der `sensor.pool_pump_manager_status` enthält folgende Attribute:
 
 ```yaml
+effective_season: summer
+season_mode: auto
+seasonal_circulations: 1.5
 metering_power_source: sensor.hm_xxxxx_power
 metering_energy_source: sensor.hm_xxxxx_energy_counter
 metering_voltage_source: sensor.hm_xxxxx_voltage
 metering_current_source: sensor.hm_xxxxx_current
 metering_frequency_source: sensor.hm_xxxxx_frequency
 ```
+
+---
+
+## Unterstütztes Gerät: HM-ES-PMSw1-Pl-DN-R1
+
+Der Homematic Funk-Schalt-Mess-Aktor HM-ES-PMSw1-Pl-DN-R1 stellt folgende Entities bereit, die automatisch erkannt werden:
+
+| Messgröße | Typische Entity | Einheit |
+|-----------|----------------|---------|
+| Schalter | `switch.hm_*` | – |
+| Leistung | `sensor.hm_*_power` | W |
+| Energiezähler | `sensor.hm_*_energy_counter` | Wh |
+| Spannung | `sensor.hm_*_voltage` | V |
+| Strom | `sensor.hm_*_current` | A |
+| Frequenz | `sensor.hm_*_frequency` | Hz |
 
 ---
 
@@ -210,33 +297,42 @@ metering_frequency_source: sensor.hm_xxxxx_frequency
 Wenn der Pumpenschalter eingeschaltet ist, aber die Leistungsaufnahme länger als **2 Minuten** unter **100 Watt** liegt, wird:
 
 - `binary_sensor.pool_pump_manager_warning` aktiviert
-- Eine **persistente Benachrichtigung** in Home Assistant erzeugt:
-  > *"Poolpumpe scheint nicht zu laufen, obwohl sie eingeschaltet ist."*
+- Eine **persistente Benachrichtigung** in Home Assistant erzeugt
 
 ---
 
-## Dashboard-Beispiel
+## Dashboard
 
 Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges Dashboard mit:
 
-- Automatik-Schalter, Pumpen-Status, Warnungsanzeige
-- Live-Messwerte (Leistung, Energie, Spannung, Strom, Frequenz)
-- Laufzeit-Übersicht
-- Effizienz- und Leistungs-Gauge
-- Verlaufsgraph Leistung (24 Stunden)
+- **Pool Control Center Custom Card** (Dark-Glass-Design, Pool-SVG)
+- Saisonmodus-Auswahl und Betriebsparameter
+- Status-Übersicht und Laufzeiten
+- Wartungs- & Lebenszeitzähler mit Reset-Buttons
+- Live-Messwerte und Verlaufsgraph
+- Wasserqualität-Platzhalter
 - Aktions-Buttons für alle Services
 
 ---
 
 ## Changelog
 
+### v0.3.0
+
+- **Saisonmodus**: `select.pool_pump_manager_season_mode` mit automatischer Jahreszeiterkennung
+- **Saisonale Umwälzfrequenz**: Frühling/Herbst 1,0×, Sommer 1,5×, Winter 0,5× pro Tag
+- **Wartungszähler**: Gesamtlaufzeit, Saisonlaufzeit, Laufzeit seit Wartung (persistent)
+- **Reset-Buttons**: `button.pool_pump_manager_reset_maintenance` und `button.pool_pump_manager_reset_season`
+- **Pool Control Center**: Custom Lovelace Card mit SVG-Pool-Visualisierung und Dark-Glass-Design
+- **Wasserqualität-Platzhalter**: pH, Redox, Wassertemperatur (Vorbereitung für zukünftige Version)
+- Diagnoseinformationen im Status-Sensor erweitert (Season-Daten)
+
 ### v0.2.0
 
-- **Automatische Sensor-Erkennung** nach Auswahl des Pumpenschalters (via Device-ID + Fallback über Entity-Namen)
+- **Automatische Sensor-Erkennung** nach Auswahl des Pumpenschalters
 - **5 neue Metering-Sensoren**: Leistung, Energie, Spannung, Strom, Frequenz
 - **Options Flow erweitert**: 2-Schritt-Flow (Pool-Parameter + Sensoren)
-- **Diagnoseinformationen** im Status-Sensor (Quell-Entities sichtbar)
-- Volle Rückwärtskompatibilität zu v0.1.0
+- **Diagnoseinformationen** im Status-Sensor
 
 ### v0.1.0
 

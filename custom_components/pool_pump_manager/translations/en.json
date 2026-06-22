@@ -3,30 +3,19 @@
     "step": {
       "user": {
         "title": "Pool Pump Manager – Pump Switch",
-        "description": "Select the pool pump switch. In the next step, associated metering sensors will be auto-discovered.",
-        "data": {
-          "pump_switch": "Pump Switch"
-        },
-        "data_description": {
-          "pump_switch": "Switch entity of the pool pump (e.g. switch.pool_pump)"
-        }
+        "description": "Select the pool pump switch. Metering sensors will be auto-discovered next.",
+        "data": { "pump_switch": "Pump Switch" },
+        "data_description": { "pump_switch": "Switch entity of the pool pump" }
       },
       "sensors": {
         "title": "Assign Metering Sensors",
-        "description": "The integration automatically searched for metering sensors belonging to **{pump_switch}**. Review the assignments and adjust if needed. All fields are optional.",
+        "description": "Auto-discovered sensors for **{pump_switch}**. All fields are optional.",
         "data": {
           "power_sensor": "Power Sensor (W / kW)",
           "energy_sensor_entity": "Energy Counter (Wh / kWh)",
           "voltage_sensor_entity": "Voltage Sensor (V)",
           "current_sensor_entity": "Current Sensor (A)",
           "frequency_sensor_entity": "Frequency Sensor (Hz)"
-        },
-        "data_description": {
-          "power_sensor": "Current power draw of the pump",
-          "energy_sensor_entity": "Total energy consumption (kWh / Wh)",
-          "voltage_sensor_entity": "Mains voltage at the pump",
-          "current_sensor_entity": "Current draw of the pump",
-          "frequency_sensor_entity": "Mains frequency"
         }
       },
       "pool": {
@@ -36,20 +25,18 @@
           "pool_volume": "Pool Volume (m³)",
           "pump_flow_rate": "Pump Flow Rate (m³/h)",
           "water_temperature": "Water Temperature (°C)",
-          "circulations_per_day": "Circulations per Day",
+          "circulations_per_day": "Circulations per Day (base)",
           "start_time": "Start Time",
           "end_time": "End Time"
         }
       }
     },
     "error": {
-      "entity_not_found": "Entity not found – please check the entity ID.",
+      "entity_not_found": "Entity not found.",
       "end_before_start": "End time must be after start time.",
-      "required": "This field is required."
+      "required": "Required field."
     },
-    "abort": {
-      "already_configured": "This pump is already configured."
-    }
+    "abort": { "already_configured": "This pump is already configured." }
   },
   "options": {
     "step": {
@@ -59,14 +46,13 @@
           "pool_volume": "Pool Volume (m³)",
           "pump_flow_rate": "Pump Flow Rate (m³/h)",
           "water_temperature": "Water Temperature (°C)",
-          "circulations_per_day": "Circulations per Day",
+          "circulations_per_day": "Circulations per Day (base)",
           "start_time": "Start Time",
           "end_time": "End Time"
         }
       },
       "sensors": {
         "title": "Adjust Metering Sensors",
-        "description": "Assign metering sensors to the pump. All fields are optional.",
         "data": {
           "power_sensor": "Power Sensor (W / kW)",
           "energy_sensor_entity": "Energy Counter (Wh / kWh)",
@@ -76,71 +62,52 @@
         }
       }
     },
-    "error": {
-      "end_before_start": "End time must be after start time."
-    }
+    "error": { "end_before_start": "End time must be after start time." }
   },
   "entity": {
-    "switch": {
-      "automation_enabled": {
-        "name": "Automation"
+    "switch": { "automation_enabled": { "name": "Automation" } },
+    "select": {
+      "season_mode": {
+        "name": "Season Mode",
+        "state": {
+          "auto": "Automatic", "spring": "Spring", "summer": "Summer",
+          "autumn": "Autumn", "winter": "Winter"
+        }
       }
     },
-    "number": {
-      "daily_runtime_hours": {
-        "name": "Daily Runtime (Target)"
-      }
+    "button": {
+      "reset_maintenance": { "name": "Reset Maintenance Counter" },
+      "reset_season": { "name": "Reset Season Counter" }
     },
+    "number": { "daily_runtime_hours": { "name": "Daily Runtime (Target)" } },
     "sensor": {
-      "runtime_today": {
-        "name": "Runtime Today"
-      },
-      "target_runtime": {
-        "name": "Target Runtime"
-      },
+      "runtime_today": { "name": "Runtime Today" },
+      "target_runtime": { "name": "Target Runtime" },
       "status": {
         "name": "Status",
         "state": {
-          "manual": "Manual",
-          "waiting": "Waiting",
-          "running": "Running",
-          "scheduled": "Scheduled",
-          "completed": "Completed",
-          "unknown": "Unknown"
+          "manual": "Manual", "waiting": "Waiting", "running": "Running",
+          "scheduled": "Scheduled", "completed": "Completed", "unknown": "Unknown"
         }
       },
-      "efficiency": {
-        "name": "Efficiency"
-      },
-      "next_start": {
-        "name": "Next Start"
-      },
-      "remaining_runtime": {
-        "name": "Remaining Runtime"
-      },
-      "metering_power": {
-        "name": "Power"
-      },
-      "metering_energy": {
-        "name": "Energy"
-      },
-      "metering_voltage": {
-        "name": "Voltage"
-      },
-      "metering_current": {
-        "name": "Current"
-      },
-      "metering_frequency": {
-        "name": "Frequency"
-      }
+      "efficiency": { "name": "Efficiency" },
+      "next_start": { "name": "Next Start" },
+      "remaining_runtime": { "name": "Remaining Runtime" },
+      "total_runtime": { "name": "Total Runtime" },
+      "season_runtime": { "name": "Season Runtime" },
+      "runtime_since_maintenance": { "name": "Runtime Since Maintenance" },
+      "metering_power": { "name": "Power" },
+      "metering_energy": { "name": "Energy" },
+      "metering_voltage": { "name": "Voltage" },
+      "metering_current": { "name": "Current" },
+      "metering_frequency": { "name": "Frequency" },
+      "ph": { "name": "pH Value" },
+      "redox": { "name": "Redox Potential" },
+      "pool_temperature": { "name": "Water Temperature" }
     },
     "binary_sensor": {
-      "running": {
-        "name": "Pump Running"
-      },
-      "warning": {
-        "name": "Warning"
-      }
+      "running": { "name": "Pump Running" },
+      "warning": { "name": "Warning" }
     }
   }
 }

@@ -1,149 +1,184 @@
+## Pool Pump Manager – Lovelace Beispiel-Dashboard (v0.3.0)
+## Voraussetzung: Pool Control Center Card ist als Ressource registriert (automatisch durch die Integration).
+
 title: Pool Management
 views:
   - title: Pool
     icon: mdi:pool
     cards:
-      - type: vertical-stack
+
+      ## ── Pool Control Center (Custom Card) ───────────────────────────────
+      ## Zeigt Pool-Visualisierung, Live-Daten, Steuerung in einem kompakten Dark-Glass-Design.
+      - type: custom:pool-control-center-card
+        title: Pool Control Center
+
+      ## ── Saisonmodus & Betriebsparameter ─────────────────────────────────
+      - type: entities
+        title: Betrieb & Saison
+        entities:
+          - entity: switch.pool_pump_manager_automation_enabled
+            name: Automatik
+            icon: mdi:robot
+          - entity: select.pool_pump_manager_season_mode
+            name: Saisonmodus
+            icon: mdi:weather-partly-cloudy
+          - entity: number.pool_pump_manager_daily_runtime_hours
+            name: Laufzeit manuell überschreiben
+            icon: mdi:timer-cog-outline
+
+      ## ── Status-Übersicht ─────────────────────────────────────────────────
+      - type: glance
+        title: Status
+        entities:
+          - entity: sensor.pool_pump_manager_status
+            name: Status
+          - entity: binary_sensor.pool_pump_manager_running
+            name: Pumpe läuft
+          - entity: binary_sensor.pool_pump_manager_warning
+            name: Warnung
+          - entity: sensor.pool_pump_manager_efficiency
+            name: Effizienz
+          - entity: sensor.pool_pump_manager_next_start
+            name: Nächster Start
+
+      ## ── Laufzeiten ───────────────────────────────────────────────────────
+      - type: glance
+        title: Laufzeiten heute
+        entities:
+          - entity: sensor.pool_pump_manager_runtime_today
+            name: Heute
+          - entity: sensor.pool_pump_manager_target_runtime
+            name: Ziel
+          - entity: sensor.pool_pump_manager_remaining_runtime
+            name: Rest
+
+      ## ── Wartung & Lebenszeit ─────────────────────────────────────────────
+      - type: entities
+        title: Wartung & Lebenszeit
+        entities:
+          - entity: sensor.pool_pump_manager_total_runtime
+            name: Gesamtlaufzeit
+            icon: mdi:infinity
+          - entity: sensor.pool_pump_manager_season_runtime
+            name: Saisonlaufzeit
+            icon: mdi:weather-partly-cloudy
+          - entity: sensor.pool_pump_manager_runtime_since_maintenance
+            name: Laufzeit seit Wartung
+            icon: mdi:wrench-clock
+          - type: divider
+          - entity: button.pool_pump_manager_reset_maintenance
+            name: Wartungszähler zurücksetzen
+            icon: mdi:restart
+          - entity: button.pool_pump_manager_reset_season
+            name: Saisonzähler zurücksetzen
+            icon: mdi:calendar-refresh
+
+      ## ── Messwerte ────────────────────────────────────────────────────────
+      - type: entities
+        title: Aktuelle Messwerte (HM-ES-PMSw1-Pl-DN-R1)
+        entities:
+          - entity: sensor.pool_pump_manager_power
+            name: Leistung
+            icon: mdi:lightning-bolt
+          - entity: sensor.pool_pump_manager_energy
+            name: Energie (Gesamt)
+            icon: mdi:counter
+          - entity: sensor.pool_pump_manager_voltage
+            name: Spannung
+            icon: mdi:sine-wave
+          - entity: sensor.pool_pump_manager_current
+            name: Strom
+            icon: mdi:current-ac
+          - entity: sensor.pool_pump_manager_frequency
+            name: Frequenz
+            icon: mdi:waveform
+
+      ## ── Wasserqualität (Platzhalter) ─────────────────────────────────────
+      - type: entities
+        title: Wasserqualität (kommt in zukünftiger Version)
+        entities:
+          - entity: sensor.pool_pump_manager_ph
+            name: pH-Wert
+            icon: mdi:ph
+          - entity: sensor.pool_pump_manager_redox
+            name: Redox-Potential
+            icon: mdi:atom
+          - entity: sensor.pool_pump_manager_pool_temperature
+            name: Wassertemperatur
+            icon: mdi:thermometer-water
+
+      ## ── Gauges ───────────────────────────────────────────────────────────
+      - type: horizontal-stack
         cards:
-          # ── Header ──────────────────────────────────────────────────────
-          - type: markdown
-            content: >
-              # 🏊 Pool Pump Manager
-              Intelligente Steuerung der Poolpumpe mit Messwertüberwachung.
+          - type: gauge
+            entity: sensor.pool_pump_manager_efficiency
+            name: Tageseffizienz
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 80
+              yellow: 50
+              red: 0
 
-          # ── Automatik & Status ──────────────────────────────────────────
-          - type: horizontal-stack
-            cards:
-              - type: tile
-                entity: switch.pool_pump_manager_automation_enabled
-                name: Automatik
-                icon: mdi:robot
-                color: green
-                tap_action:
-                  action: toggle
+          - type: gauge
+            entity: sensor.pool_pump_manager_power
+            name: Leistung
+            min: 0
+            max: 800
+            unit: W
+            needle: true
+            severity:
+              green: 400
+              yellow: 600
+              red: 700
 
-              - type: tile
-                entity: binary_sensor.pool_pump_manager_running
-                name: Pumpe läuft
-                icon: mdi:pump
-                color: blue
+      ## ── Verlauf ──────────────────────────────────────────────────────────
+      - type: history-graph
+        title: Leistung (24h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.pool_pump_manager_power
+            name: Leistung
 
-              - type: tile
-                entity: binary_sensor.pool_pump_manager_warning
-                name: Warnung
-                icon: mdi:alert-circle
-                color: red
+      ## ── Manuelle Aktionen ────────────────────────────────────────────────
+      - type: entities
+        title: Aktionen
+        entities:
+          - type: button
+            name: Jetzt starten
+            icon: mdi:play-circle
+            tap_action:
+              action: perform-action
+              perform_action: pool_pump_manager.start_now
+          - type: button
+            name: Jetzt stoppen
+            icon: mdi:stop-circle
+            tap_action:
+              action: perform-action
+              perform_action: pool_pump_manager.stop_now
+          - type: button
+            name: Tageslaufzeit zurücksetzen
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: pool_pump_manager.reset_runtime_today
+          - type: button
+            name: Zeitplan neu berechnen
+            icon: mdi:calculator
+            tap_action:
+              action: perform-action
+              perform_action: pool_pump_manager.force_recalculate
 
-          # ── Status & Nächster Start ─────────────────────────────────────
-          - type: horizontal-stack
-            cards:
-              - type: tile
-                entity: sensor.pool_pump_manager_status
-                name: Status
-                icon: mdi:pool
-
-              - type: tile
-                entity: sensor.pool_pump_manager_next_start
-                name: Nächster Start
-                icon: mdi:clock-start
-
-          # ── Messwerte (HM-ES-PMSw1-Pl-DN-R1) ──────────────────────────
-          - type: entities
-            title: Aktuelle Messwerte
-            entities:
-              - entity: sensor.pool_pump_manager_power
-                name: Leistung
-                icon: mdi:lightning-bolt
-              - entity: sensor.pool_pump_manager_energy
-                name: Energie (Gesamt)
-                icon: mdi:counter
-              - entity: sensor.pool_pump_manager_voltage
-                name: Spannung
-                icon: mdi:sine-wave
-              - entity: sensor.pool_pump_manager_current
-                name: Strom
-                icon: mdi:current-ac
-              - entity: sensor.pool_pump_manager_frequency
-                name: Frequenz
-                icon: mdi:waveform
-
-          # ── Laufzeiten ──────────────────────────────────────────────────
-          - type: entities
-            title: Laufzeiten
-            entities:
-              - entity: sensor.pool_pump_manager_runtime_today
-                name: Laufzeit heute
-                icon: mdi:timer-outline
-              - entity: sensor.pool_pump_manager_target_runtime
-                name: Ziel-Laufzeit
-                icon: mdi:target
-              - entity: sensor.pool_pump_manager_remaining_runtime
-                name: Restlaufzeit
-                icon: mdi:timer-sand
-              - entity: number.pool_pump_manager_daily_runtime_hours
-                name: Laufzeit manuell überschreiben
-                icon: mdi:timer-cog-outline
-
-          # ── Statistik ───────────────────────────────────────────────────
-          - type: horizontal-stack
-            cards:
-              - type: gauge
-                entity: sensor.pool_pump_manager_efficiency
-                name: Tageseffizienz
-                min: 0
-                max: 100
-                unit: "%"
-                needle: true
-                severity:
-                  green: 80
-                  yellow: 50
-                  red: 0
-
-              - type: gauge
-                entity: sensor.pool_pump_manager_power
-                name: Leistung
-                min: 0
-                max: 800
-                unit: W
-                needle: true
-                severity:
-                  green: 400
-                  yellow: 600
-                  red: 700
-
-          # ── Verlauf Leistung ────────────────────────────────────────────
-          - type: history-graph
-            title: Leistung (24h)
-            hours_to_show: 24
-            entities:
-              - entity: sensor.pool_pump_manager_power
-                name: Leistung
-
-          # ── Aktionen ────────────────────────────────────────────────────
-          - type: entities
-            title: Aktionen
-            entities:
-              - type: button
-                name: Jetzt starten
-                icon: mdi:play-circle
-                tap_action:
-                  action: perform-action
-                  perform_action: pool_pump_manager.start_now
-              - type: button
-                name: Jetzt stoppen
-                icon: mdi:stop-circle
-                tap_action:
-                  action: perform-action
-                  perform_action: pool_pump_manager.stop_now
-              - type: button
-                name: Laufzeit zurücksetzen
-                icon: mdi:restart
-                tap_action:
-                  action: perform-action
-                  perform_action: pool_pump_manager.reset_runtime_today
-              - type: button
-                name: Zeitplan neu berechnen
-                icon: mdi:calculator
-                tap_action:
-                  action: perform-action
-                  perform_action: pool_pump_manager.force_recalculate
+      ## ── Warnung (bedingt sichtbar) ───────────────────────────────────────
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.pool_pump_manager_warning
+            state: "on"
+        card:
+          type: markdown
+          content: >
+            ## ⚠️ Warnung
+            Die Pumpe ist eingeschaltet, nimmt aber weniger als 100 W auf.
+            Bitte Pumpe und Verkabelung prüfen!
