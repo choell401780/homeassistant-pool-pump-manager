@@ -336,6 +336,21 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.4.0
+
+- **Komplett überarbeitetes Pool Control Center Dashboard** (Redesign)
+- Neues Dark-Glass-Design mit professioneller Optik (Desktop, Tablet, Mobil)
+- SVG-Poolvisualisierung: Nacht-Szene mit ovalem Pool, Holzdeck, Hecken, Beleuchtung, Palme
+- SVG-Technikbereich: Poolpumpe (mit Animation), Sandfilter, Dosieranlage mit Echtzeit-Status
+- Pulsierender Statuspunkt für Automatikmodus (grün = aktiv, grau = deaktiviert)
+- 7 Live-Statuskacheln: Status, Leistung, Spannung, Strom, Frequenz, Effizienz, Energie
+- Fortschrittsbalken für Tagesziel-Erreichung in Laufzeiten-Panel
+- Saisonmodus-Panel mit großer Anzeige der aktuellen Saison
+- Verbesserte Steuerpanel-Optik (Auto-Toggle + Start/Stop-Buttons)
+- Responsive für alle Bildschirmgrößen
+- Wasserbewegungsanimation wenn Pumpe läuft (Ripple-Effekt im Pool)
+- Impeller-Rotationsanimation an der Pumpe
+
 ### v0.3.1
 
 - **Hotfix**: Automatische Lovelace-Ressourcen-Registrierung repariert
