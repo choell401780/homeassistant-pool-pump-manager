@@ -1,12 +1,18 @@
 /**
  * Pool Control Center – Custom Lovelace Card
- * Pool Pump Manager v0.4.0
- * Professional Dark-Glass Dashboard | SVG Pool Scene | Dynamic HA Binding
+ * Pool Pump Manager v0.4.1
+ * Dark-Glass Dashboard | SVG Pool Scene | HA Service Calls
  */
+const CARD_VERSION = '0.4.1';
 
-const CARD_VERSION = '0.4.0';
+const LOG = {
+  info:  (...a) => console.info( '%c[PCC]%c', 'color:#22d3ee;font-weight:700', '', ...a),
+  debug: (...a) => console.debug('[PCC]', ...a),
+  warn:  (...a) => console.warn( '[PCC]', ...a),
+};
 
-const E = {
+// ── Default Entity IDs ────────────────────────────────────────────────────────
+const ENTITY_DEFAULTS = {
   automation:    'switch.pool_pump_manager_automation_enabled',
   running:       'binary_sensor.pool_pump_manager_running',
   warning:       'binary_sensor.pool_pump_manager_warning',
@@ -32,6 +38,21 @@ const E = {
   btnSeason:     'button.pool_pump_manager_reset_season',
 };
 
+// Alternative IDs tried when primary is absent from hass.states
+const ENTITY_FALLBACKS = {
+  temperature: [
+    'sensor.pool_pump_manager_temperature',
+    'sensor.pool_pump_manager_water_temperature',
+    'sensor.pool_pump_manager_pool_temp',
+  ],
+  power:     ['sensor.pool_pump_manager_leistung'],
+  voltage:   ['sensor.pool_pump_manager_spannung'],
+  current:   ['sensor.pool_pump_manager_strom'],
+  frequency: ['sensor.pool_pump_manager_hz'],
+  energy:    ['sensor.pool_pump_manager_verbrauch'],
+};
+
+// ── Season / Status constants ─────────────────────────────────────────────────
 const SEASON_LABEL = { auto: 'Auto', spring: 'Frühling', summer: 'Sommer', autumn: 'Herbst', winter: 'Winter' };
 const SEASON_ICON  = { auto: '🔄', spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️' };
 const SEASON_COLOR = { auto: '#94a3b8', spring: '#86efac', summer: '#fbbf24', autumn: '#fb923c', winter: '#93c5fd' };
@@ -42,828 +63,904 @@ const STATUS_COLOR = { running: '#22d3ee', waiting: '#a78bfa', scheduled: '#60a5
 // ── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
 :host { display: block; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 .pcc {
-  background: #080f1c;
+  background: linear-gradient(160deg, #0b1528 0%, #07101e 55%, #050d18 100%);
   border-radius: 16px;
   overflow: hidden;
-  font-family: var(--primary-font-family, 'Roboto', sans-serif);
   color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   user-select: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.6);
 }
 
-/* ── Header ── */
 .pcc-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 16px;
-  background: rgba(255,255,255,0.025);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 14px 18px 12px;
+  background: rgba(0,0,0,0.35);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
   flex-wrap: wrap;
 }
 .pcc-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  flex: 1;
-  min-width: 160px;
+  letter-spacing: .06em;
+  color: #e2e8f0;
+  text-transform: uppercase;
 }
 .badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px;
+  padding: 5px 12px;
   border-radius: 20px;
-  font-size: 0.76rem;
+  font-size: 0.73rem;
   font-weight: 600;
   cursor: pointer;
+  transition: filter .18s, transform .15s;
   border: 1px solid transparent;
-  transition: all 0.2s;
-  white-space: nowrap;
+  position: relative;
+  z-index: 5;
+  pointer-events: all;
 }
-.badge-auto-on  { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.3); color: #22d3ee; }
-.badge-auto-off { background: rgba(100,116,139,0.08); border-color: rgba(100,116,139,0.25); color: #64748b; }
-.badge-season   { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.3); color: #fbbf24; }
-.badge:hover    { filter: brightness(1.15); }
-.version-label  { font-size: 0.62rem; color: #2d3f55; letter-spacing: 0.5px; margin-left: auto; }
-
+.badge:hover  { filter: brightness(1.25); }
+.badge:active { transform: scale(0.95); }
+.badge-auto-on  { background: rgba(34,211,238,.13); border-color: rgba(34,211,238,.35); color: #22d3ee; }
+.badge-auto-off { background: rgba(100,116,139,.1);  border-color: rgba(100,116,139,.25); color: #64748b; }
+.badge-season   { background: rgba(148,163,184,.09); border-color: rgba(148,163,184,.2);  color: #94a3b8; }
 .pulse-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 6px #4ade80;
-  animation: pulse 2s ease-in-out infinite;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #22d3ee;
+  box-shadow: 0 0 7px #22d3ee;
+  animation: pdot 2s ease-in-out infinite;
   flex-shrink: 0;
 }
-.pulse-dot.off { background: #374151; box-shadow: none; animation: none; }
+.pulse-dot.off { background: #475569; box-shadow: none; animation: none; }
+@keyframes pdot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.82)} }
+.version-label { margin-left: auto; font-size: 0.62rem; color: #2d3f55; letter-spacing: .08em; }
 
-/* ── Warning banner ── */
 .warn {
-  background: rgba(239,68,68,0.08);
-  border-bottom: 1px solid rgba(239,68,68,0.25);
-  padding: 6px 16px;
-  font-size: 0.75rem;
+  padding: 9px 18px;
+  background: rgba(239,68,68,.14);
+  border-left: 3px solid #ef4444;
   color: #fca5a5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 500;
 }
 
-/* ── Main Row: Pool + Tech ── */
 .main-row {
   display: grid;
-  grid-template-columns: 3fr 2fr;
-  min-height: 280px;
+  grid-template-columns: 1fr 320px;
+  min-height: 260px;
 }
 .pool-area {
-  position: relative;
   overflow: hidden;
-  background: #050d08;
-  min-height: 260px;
+  display: flex;
+  align-items: stretch;
 }
 .pool-area svg {
   width: 100%; height: 100%;
+  min-height: 240px;
+  pointer-events: none;
   display: block;
-  min-height: 260px;
 }
 .tech-area {
+  background: rgba(0,0,0,.3);
+  border-left: 1px solid rgba(255,255,255,.06);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  background: rgba(255,255,255,0.015);
-  border-left: 1px solid rgba(255,255,255,0.06);
 }
 .tech-title {
-  font-size: 0.62rem;
+  padding: 10px 14px 5px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: #3d5068;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #475569;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-weight: 600;
 }
-.tech-svg-wrap { flex: 1; }
-.tech-svg-wrap svg { width: 100%; height: auto; display: block; }
+.tech-svg-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+}
+.tech-svg-wrap svg {
+  width: 100%; height: auto;
+  pointer-events: none;
+}
 .tech-status {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 9px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(0,0,0,0.3);
-  font-size: 0.74rem;
-  margin-top: 2px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255,255,255,.05);
+  background: rgba(0,0,0,.25);
+  min-height: 38px;
 }
-.ts-running { border-color: rgba(34,211,238,0.18); background: rgba(34,211,238,0.04); }
-.ts-warn    { border-color: rgba(239,68,68,0.22); background: rgba(239,68,68,0.04); }
-.tech-status-label { font-weight: 700; }
-.tech-vals { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; color: #64748b; font-size: 0.68rem; }
+.tech-status-label { font-size: 0.8rem; font-weight: 700; }
+.tech-vals { display: flex; gap: 12px; font-size: 0.7rem; color: #64748b; font-family: monospace; }
 
-/* ── Status Tiles ── */
 .tiles-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(255,255,255,.06);
 }
 .tile {
-  padding: 13px 10px;
-  border-right: 1px solid rgba(255,255,255,0.05);
+  padding: 11px 8px;
+  border-right: 1px solid rgba(255,255,255,.05);
+  background: rgba(255,255,255,.02);
+  text-align: center;
+  transition: background .2s;
 }
 .tile:last-child { border-right: none; }
+.tile:hover { background: rgba(255,255,255,.04); }
 .tile-header {
   font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: #3d5068;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #4a5568;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 5px;
+  margin-bottom: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.tile-value { font-size: 1.32rem; font-weight: 700; line-height: 1; }
-.tile-unit  { font-size: 0.68rem; color: #64748b; font-weight: 400; margin-left: 1px; }
-.tile-sub   { font-size: 0.6rem; color: #374151; margin-top: 2px; }
+.tile-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  line-height: 1.1;
+}
+.tile-unit { font-size: 0.6rem; color: #64748b; margin-left: 1px; }
 
-/* ── Panels Row ── */
+.prog-wrap { height: 4px; background: rgba(255,255,255,.04); }
+.prog-fill { height: 100%; background: linear-gradient(90deg,#0369a1,#22d3ee); transition: width .6s ease; }
+
 .panels-row {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(255,255,255,.06);
 }
 .panel {
-  padding: 13px 11px;
-  border-right: 1px solid rgba(255,255,255,0.05);
+  padding: 14px 12px;
+  border-right: 1px solid rgba(255,255,255,.05);
 }
 .panel:last-child { border-right: none; }
 .panel-title {
   font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: #3d5068;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #22d3ee;
-  margin-bottom: 9px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 600;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 2px solid #0369a1;
 }
 .prow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  font-size: 0.76rem;
+  padding: 5px 0;
+  font-size: 0.74rem;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  gap: 4px;
 }
-.prow:last-of-type { border-bottom: none; }
-.prow-label { color: #94a3b8; display: flex; align-items: center; gap: 4px; }
-.prow-value { font-weight: 600; color: #e2e8f0; }
-.not-cfg { color: #2d3f55; font-style: italic; font-size: 0.68rem; }
+.prow:last-child { border-bottom: none; }
+.prow-label { color: #64748b; flex-shrink: 0; }
+.prow-value { font-weight: 600; color: #94a3b8; text-align: right; }
+.not-cfg { color: #2d3f55; font-size: 0.65rem; font-style: italic; }
 
-/* Progress bar */
-.pbar-bg   { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; margin-top: 9px; overflow: hidden; }
-.pbar-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #4ade80); border-radius: 3px; transition: width 0.6s ease; }
-.pbar-label { font-size: 0.63rem; color: #4ade80; text-align: right; margin-top: 2px; font-weight: 600; }
-
-/* Season panel */
-.season-display   { text-align: center; padding: 6px 0 3px; }
-.season-sublabel  { font-size: 0.62rem; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; }
-.season-name      { font-size: 1.75rem; font-weight: 800; line-height: 1.1; }
-.season-btn {
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  width: 100%; padding: 7px; margin-top: 7px;
-  border-radius: 8px;
-  border: 1px solid rgba(34,211,238,0.2);
-  background: rgba(34,211,238,0.05);
-  color: #22d3ee;
-  font-size: 0.7rem; font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.season-btn:hover { background: rgba(34,211,238,0.1); border-color: rgba(34,211,238,0.4); }
-
-/* Water quality note */
-.wq-note { font-size: 0.62rem; color: #2d3f55; text-align: center; margin-top: 7px; font-style: italic; }
-
-/* Maintenance buttons */
-.mbtn-row { display: flex; gap: 5px; margin-top: 8px; }
-.mbtn {
-  flex: 1; padding: 6px 3px;
-  border-radius: 7px;
-  border: 1px solid rgba(100,116,139,0.2);
-  background: rgba(100,116,139,0.05);
-  color: #94a3b8;
-  cursor: pointer; font-size: 0.65rem; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; gap: 3px;
-  transition: all 0.15s;
-}
-.mbtn:hover { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.35); color: #fbbf24; }
-
-/* Control panel */
 .ctrl-toggle {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; border-radius: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  border-radius: 9px;
+  margin-bottom: 9px;
   cursor: pointer;
-  transition: all 0.15s;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  transition: background .18s, transform .15s;
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: #94a3b8;
+  position: relative;
+  z-index: 10;
+  pointer-events: all;
 }
-.ctrl-toggle:hover { background: rgba(255,255,255,0.07); }
-.ctrl-toggle-label { font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.tog {
-  width: 36px; height: 20px; border-radius: 10px;
-  position: relative; transition: background 0.2s;
+.ctrl-toggle:hover  { background: rgba(255,255,255,.08); }
+.ctrl-toggle:active { transform: scale(0.97); }
+.toggle-track {
+  width: 34px; height: 18px;
+  border-radius: 9px;
+  background: #1a2535;
+  border: 1px solid rgba(255,255,255,.1);
+  position: relative;
+  transition: background .3s;
   flex-shrink: 0;
 }
-.tog.on  { background: #22d3ee; }
-.tog.off { background: #1e293b; border: 1px solid #334155; }
-.tog-thumb {
-  width: 16px; height: 16px; border-radius: 50%;
-  background: #fff;
-  position: absolute; top: 2px; left: 2px;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+.toggle-track.on { background: #0369a1; border-color: #22d3ee; box-shadow: 0 0 8px rgba(34,211,238,.3); }
+.toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #64748b;
+  transition: transform .28s, background .28s;
 }
-.tog.on .tog-thumb { transform: translateX(16px); }
+.toggle-track.on .toggle-thumb { transform: translateX(16px); background: #fff; }
+.ctrl-label { flex: 1; }
+.ctrl-label.on { color: #22d3ee; }
 .cbtn {
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  width: 100%; padding: 9px;
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.09);
-  background: rgba(255,255,255,0.04);
-  color: #e2e8f0;
-  cursor: pointer; font-size: 0.8rem; font-weight: 600;
-  margin-bottom: 5px;
-  transition: all 0.15s;
+  border: none;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .18s, transform .12s, box-shadow .18s;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  position: relative;
+  z-index: 10;
+  pointer-events: all;
 }
 .cbtn:last-child { margin-bottom: 0; }
-.cbtn-start { border-color: rgba(74,222,128,0.28); color: #4ade80; }
-.cbtn-stop  { border-color: rgba(248,113,113,0.28); color: #f87171; }
-.cbtn-start:hover { background: rgba(74,222,128,0.1); border-color: #4ade80; }
-.cbtn-stop:hover  { background: rgba(248,113,113,0.1); border-color: #f87171; }
-
-/* ── Nav Footer ── */
-.nav { display: flex; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.18); }
-.ntab {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 7px 3px;
-  font-size: 0.58rem; color: #374151;
+.cbtn:hover  { filter: brightness(1.15); }
+.cbtn:active { transform: scale(0.95); filter: brightness(.88); }
+.cbtn.fx { animation: btnfx .28s ease; }
+@keyframes btnfx { 0%{transform:scale(1)} 40%{transform:scale(.93)} 100%{transform:scale(1)} }
+.cbtn-start { background: linear-gradient(135deg,#047857,#10b981); color: #fff; box-shadow: 0 2px 10px rgba(5,150,105,.3); }
+.cbtn-stop  { background: linear-gradient(135deg,#b91c1c,#ef4444); color: #fff; box-shadow: 0 2px 10px rgba(220,38,38,.3); }
+.mbtn {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(255,255,255,.04);
+  color: #64748b;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
   cursor: pointer;
-  border-right: 1px solid rgba(255,255,255,0.04);
-  transition: color 0.15s;
-  text-align: center;
+  transition: background .18s, color .18s, transform .12s;
+  margin-bottom: 5px;
+  position: relative;
+  z-index: 10;
+  pointer-events: all;
 }
-.ntab:last-child { border-right: none; }
-.ntab.active { color: #22d3ee; background: rgba(34,211,238,0.04); }
-.ntab:hover:not(.active) { color: #64748b; }
-.ntab-icon { font-size: 0.9rem; }
+.mbtn:last-child { margin-bottom: 0; }
+.mbtn:hover  { background: rgba(255,255,255,.1); color: #94a3b8; }
+.mbtn:active { transform: scale(0.96); }
+.mbtn.fx { animation: btnfx .28s ease; }
 
-/* ── Animations ── */
-@keyframes pulse   { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.35;transform:scale(0.72)} }
-@keyframes ripple  { 0%{opacity:0.55;transform:scale(0.88)} 100%{opacity:0;transform:scale(1.45)} }
-@keyframes shimmer { 0%,100%{opacity:0.22} 50%{opacity:0.52} }
-@keyframes spin    { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-.pump-spin   { animation: spin 0.9s linear infinite; transform-box: fill-box; transform-origin: center; }
-.water-ripple  { animation: ripple 2.5s ease-out infinite; }
-.water-ripple2 { animation: ripple 2.5s ease-out infinite; animation-delay: -1.25s; }
-.shimmer { animation: shimmer 3s ease-in-out infinite; }
+.season-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.sbtn {
+  padding: 4px 2px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(255,255,255,.03);
+  color: #64748b;
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .18s;
+  text-align: center;
+  position: relative;
+  z-index: 10;
+  pointer-events: all;
+  line-height: 1.4;
+}
+.sbtn:hover  { background: rgba(255,255,255,.1); color: #94a3b8; }
+.sbtn:active { transform: scale(0.93); }
+.sbtn.active { border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.1); color: #22d3ee; }
 
-/* ── Responsive ── */
-@media(max-width:750px)  { .main-row{grid-template-columns:1fr} .tech-area{border-left:none;border-top:1px solid rgba(255,255,255,0.06)} }
-@media(max-width:900px)  { .tiles-row{grid-template-columns:repeat(4,1fr)} }
-@media(max-width:560px)  { .tiles-row{grid-template-columns:repeat(2,1fr)} }
-@media(max-width:1000px) { .panels-row{grid-template-columns:repeat(3,1fr)} }
-@media(max-width:640px)  { .panels-row{grid-template-columns:repeat(2,1fr)} }
-@media(max-width:380px)  { .panels-row{grid-template-columns:1fr} }
+.nav-footer {
+  display: flex;
+  border-top: 1px solid rgba(255,255,255,.05);
+  background: rgba(0,0,0,.2);
+}
+.nav-tab {
+  flex: 1;
+  padding: 8px 2px;
+  text-align: center;
+  font-size: 0.58rem;
+  color: #2d3f55;
+  letter-spacing: .07em;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-right: 1px solid rgba(255,255,255,.04);
+}
+.nav-tab:last-child { border-right: none; }
+.nav-tab.active { color: #22d3ee; }
+
+@keyframes spin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes rip1  { 0%,100%{opacity:.3;transform:scale(1)} 50%{opacity:.7;transform:scale(1.06)} }
+@keyframes rip2  { 0%,100%{opacity:.18;transform:scale(1)} 50%{opacity:.45;transform:scale(1.04)} }
+@keyframes drift { 0%,100%{opacity:.25;transform:translateX(0)} 50%{opacity:.55;transform:translateX(9px)} }
+
+@media(max-width:900px) {
+  .main-row { grid-template-columns: 1fr 270px; }
+  .tiles-row { grid-template-columns: repeat(4,1fr); }
+  .tile:nth-child(n+5) { border-top: 1px solid rgba(255,255,255,.05); }
+}
+@media(max-width:680px) {
+  .main-row { grid-template-columns: 1fr; }
+  .tech-area { border-left: none; border-top: 1px solid rgba(255,255,255,.06); max-height: 200px; }
+  .tiles-row { grid-template-columns: repeat(3,1fr); }
+  .tile:nth-child(n+4) { border-top: 1px solid rgba(255,255,255,.05); }
+  .panels-row { grid-template-columns: repeat(2,1fr); }
+  .panel:nth-child(2n) { border-right: none; }
+  .panel:nth-child(n+3) { border-top: 1px solid rgba(255,255,255,.05); }
+  .panel:last-child { grid-column: 1/-1; }
+}
+@media(max-width:460px) {
+  .tiles-row { grid-template-columns: repeat(2,1fr); }
+  .panels-row { grid-template-columns: 1fr; }
+  .panel { border-right: none !important; }
+  .panel+.panel { border-top: 1px solid rgba(255,255,255,.05); }
+}
 `;
 
 // ── Pool SVG ─────────────────────────────────────────────────────────────────
 function buildPoolSvg(running) {
-  const plankLines = Array.from({ length: 14 }, (_, i) => {
-    const y = 118 + i * 13;
-    const hw = Math.min(360, 20 + i * 25);
-    return `<line x1="${415 - hw}" y1="${y}" x2="${415 + hw}" y2="${y}" stroke="#5a3413" stroke-width="1.3" opacity="0.55"/>`;
-  }).join('');
+  var stars = '';
+  for (var i = 0; i < 22; i++) {
+    var sx = ((i * 41 + 17) % 820) + 20;
+    var sy = ((i * 29 + 11) % 88) + 4;
+    var sr = (i % 3 === 0) ? 1.2 : 0.65;
+    var so = (0.25 + (i % 4) * 0.15).toFixed(2);
+    stars += '<circle cx="' + sx + '" cy="' + sy + '" r="' + sr + '" fill="#e2e8f0" opacity="' + so + '"/>';
+  }
+  var planks = '';
+  for (var j = 0; j < 7; j++) {
+    planks += '<line x1="0" y1="' + (162 + j * 20) + '" x2="900" y2="' + (162 + j * 20) + '" stroke="#3b220c" stroke-width="1.5" opacity="0.45"/>';
+  }
+  var grain = '';
+  for (var k = 0; k < 9; k++) {
+    grain += '<line x1="' + (70 + k * 90) + '" y1="155" x2="' + (65 + k * 90) + '" y2="320" stroke="#2a1508" stroke-width="1" opacity="0.25"/>';
+  }
+  var ripples = running
+    ? '<ellipse cx="460" cy="178" rx="65" ry="30" fill="none" stroke="rgba(180,245,255,0.45)" stroke-width="1.5" style="animation:rip1 3s ease-in-out infinite"/>'
+      + '<ellipse cx="460" cy="178" rx="115" ry="48" fill="none" stroke="rgba(130,220,255,0.25)" stroke-width="1.5" style="animation:rip2 4.2s ease-in-out infinite 1.1s"/>'
+      + '<line x1="408" y1="180" x2="512" y2="174" stroke="rgba(255,255,255,0.3)" stroke-width="1" style="animation:drift 5s ease-in-out infinite"/>'
+      + '<line x1="390" y1="188" x2="490" y2="183" stroke="rgba(255,255,255,0.2)" stroke-width="1" style="animation:drift 6s ease-in-out infinite 2s"/>'
+    : '';
 
-  return `<svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
-<defs>
-  <linearGradient id="bgSky" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#04080f"/>
-    <stop offset="100%" stop-color="#071510"/>
-  </linearGradient>
-  <linearGradient id="bgGarden" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#071510"/>
-    <stop offset="100%" stop-color="#030a06"/>
-  </linearGradient>
-  <linearGradient id="deckWood" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#7c4a1c"/>
-    <stop offset="55%" stop-color="#6b3f18"/>
-    <stop offset="100%" stop-color="#5a3413"/>
-  </linearGradient>
-  <radialGradient id="poolWater" cx="45%" cy="35%" r="60%">
-    <stop offset="0%" stop-color="#1a90c8"/>
-    <stop offset="45%" stop-color="#0e6ea8"/>
-    <stop offset="100%" stop-color="#083c5a"/>
-  </radialGradient>
-  <radialGradient id="poolGlow" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.18"/>
-    <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
-  </radialGradient>
-  <radialGradient id="deckLightGrad" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.65"/>
-    <stop offset="55%" stop-color="#d97706" stop-opacity="0.18"/>
-    <stop offset="100%" stop-color="#d97706" stop-opacity="0"/>
-  </radialGradient>
-  <radialGradient id="underwaterGrad" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.85"/>
-    <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
-  </radialGradient>
-  <filter id="fGlow"   x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
-  <filter id="fGlowLg" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="16"/></filter>
-  <filter id="fGlowSm" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
-  <clipPath id="poolClip"><ellipse cx="415" cy="175" rx="235" ry="115"/></clipPath>
-</defs>
-
-<!-- Background -->
-<rect width="880" height="320" fill="url(#bgGarden)"/>
-<rect width="880" height="60" fill="url(#bgSky)"/>
-
-<!-- Hedges backdrop -->
-<ellipse cx="55"  cy="60" rx="110" ry="52" fill="#0d2e12"/>
-<ellipse cx="175" cy="52" rx="125" ry="58" fill="#0a2510"/>
-<ellipse cx="310" cy="58" rx="118" ry="54" fill="#0d2e12"/>
-<ellipse cx="445" cy="50" rx="112" ry="56" fill="#0a2510"/>
-<ellipse cx="578" cy="56" rx="120" ry="52" fill="#0d2e12"/>
-<ellipse cx="712" cy="51" rx="128" ry="57" fill="#0a2510"/>
-<ellipse cx="840" cy="58" rx="105" ry="53" fill="#0d2e12"/>
-<!-- Front hedge details -->
-<ellipse cx="42"  cy="76" rx="75"  ry="36" fill="#112e14"/>
-<ellipse cx="800" cy="74" rx="80"  ry="38" fill="#112e14"/>
-
-<!-- Wooden deck -->
-<ellipse cx="415" cy="232" rx="372" ry="142" fill="url(#deckWood)"/>
-${plankLines}
-<ellipse cx="415" cy="232" rx="375" ry="145" fill="none" stroke="#3d2010" stroke-width="2" opacity="0.7"/>
-
-<!-- Pool shadow -->
-<ellipse cx="418" cy="183" rx="250" ry="124" fill="rgba(0,0,0,0.38)" filter="url(#fGlowSm)"/>
-
-<!-- Pool water -->
-<ellipse cx="415" cy="175" rx="237" ry="116" fill="url(#poolWater)"/>
-
-<!-- Pool glow when running -->
-${running ? `<ellipse cx="415" cy="175" rx="237" ry="116" fill="url(#poolGlow)" class="shimmer"/>` : ''}
-
-<!-- Water surface highlights -->
-<ellipse cx="372" cy="148" rx="145" ry="28" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.5" clip-path="url(#poolClip)"/>
-<ellipse cx="388" cy="164" rx="175" ry="36" fill="none" stroke="rgba(255,255,255,0.045)" stroke-width="1" clip-path="url(#poolClip)"/>
-<ellipse cx="348" cy="143" rx="96"  ry="17" fill="rgba(255,255,255,0.055)" clip-path="url(#poolClip)"/>
-
-<!-- Running ripples -->
-${running ? `
-<ellipse cx="415" cy="175" rx="185" ry="90" fill="none" stroke="#22d3ee" stroke-width="1.8" opacity="0.5" class="water-ripple"  clip-path="url(#poolClip)"/>
-<ellipse cx="415" cy="175" rx="125" ry="62" fill="none" stroke="#22d3ee" stroke-width="1.2" opacity="0.38" class="water-ripple2" clip-path="url(#poolClip)"/>
-` : ''}
-
-<!-- Underwater lights -->
-<ellipse cx="300" cy="268" rx="32" ry="13" fill="url(#underwaterGrad)" filter="url(#fGlow)" opacity="0.9"/>
-<circle  cx="300" cy="268" r="5" fill="#7dd3fc" opacity="0.95"/>
-<ellipse cx="415" cy="278" rx="32" ry="13" fill="url(#underwaterGrad)" filter="url(#fGlow)" opacity="0.9"/>
-<circle  cx="415" cy="277" r="5" fill="#7dd3fc" opacity="0.95"/>
-<ellipse cx="530" cy="268" rx="32" ry="13" fill="url(#underwaterGrad)" filter="url(#fGlow)" opacity="0.9"/>
-<circle  cx="530" cy="268" r="5" fill="#7dd3fc" opacity="0.95"/>
-
-<!-- Pool rim -->
-<ellipse cx="415" cy="175" rx="237" ry="116" fill="none" stroke="#c8b99a" stroke-width="5" opacity="0.62"/>
-<ellipse cx="415" cy="175" rx="237" ry="116" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/>
-
-<!-- Pool ladder (right edge) -->
-<line x1="530" y1="170" x2="530" y2="208" stroke="#b0b8c8" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="539" y1="170" x2="539" y2="208" stroke="#b0b8c8" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="528" y1="178" x2="541" y2="178" stroke="#b0b8c8" stroke-width="2"/>
-<line x1="528" y1="189" x2="541" y2="189" stroke="#b0b8c8" stroke-width="2"/>
-<line x1="528" y1="200" x2="541" y2="200" stroke="#b0b8c8" stroke-width="2"/>
-
-<!-- Deck lighting (glow spots) -->
-<circle cx="185" cy="272" r="38" fill="url(#deckLightGrad)" filter="url(#fGlowLg)" opacity="0.75"/>
-<circle cx="185" cy="272" r="5"  fill="#fbbf24" opacity="0.95"/>
-<circle cx="290" cy="308" r="30" fill="url(#deckLightGrad)" filter="url(#fGlowLg)" opacity="0.65"/>
-<circle cx="290" cy="308" r="4"  fill="#fbbf24" opacity="0.95"/>
-<circle cx="648" cy="272" r="38" fill="url(#deckLightGrad)" filter="url(#fGlowLg)" opacity="0.75"/>
-<circle cx="648" cy="272" r="5"  fill="#fbbf24" opacity="0.95"/>
-<circle cx="543" cy="308" r="30" fill="url(#deckLightGrad)" filter="url(#fGlowLg)" opacity="0.65"/>
-<circle cx="543" cy="308" r="4"  fill="#fbbf24" opacity="0.95"/>
-
-<!-- Palm tree (right side) -->
-<path d="M792 318 Q788 268 796 200 Q800 165 795 125" stroke="#4a2c0a" stroke-width="13" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q845 92 872 72"  stroke="#1a4d20" stroke-width="7" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q832 108 860 104" stroke="#1d5624" stroke-width="6" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q748 88 720 68"  stroke="#1a4d20" stroke-width="7" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q762 106 740 104" stroke="#1d5624" stroke-width="5" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q795 84 795 60"  stroke="#1a4d20" stroke-width="7" fill="none" stroke-linecap="round"/>
-<path d="M795 125 Q824 124 852 130" stroke="#1d5624" stroke-width="5" fill="none" stroke-linecap="round"/>
-<circle cx="795" cy="133" r="6"  fill="#7c4a0c"/>
-<circle cx="790" cy="140" r="5"  fill="#6b3f09" opacity="0.8"/>
-<circle cx="801" cy="139" r="4"  fill="#6b3f09" opacity="0.7"/>
-
-<!-- Lounge chairs (left) -->
-<g transform="translate(72,252) rotate(-12)">
-  <rect x="0"  y="-18" width="58" height="13" rx="4" fill="#d4c9a8" opacity="0.65"/>
-  <rect x="0"  y="-4"  width="58" height="10" rx="4" fill="#c8bc94" opacity="0.65"/>
-  <rect x="5"  y="6"   width="5"  height="9"  rx="2" fill="#b8a880" opacity="0.65"/>
-  <rect x="48" y="6"   width="5"  height="9"  rx="2" fill="#b8a880" opacity="0.65"/>
-</g>
-<g transform="translate(82,285) rotate(-12)">
-  <rect x="0"  y="-18" width="58" height="13" rx="4" fill="#d4c9a8" opacity="0.6"/>
-  <rect x="0"  y="-4"  width="58" height="10" rx="4" fill="#c8bc94" opacity="0.6"/>
-  <rect x="5"  y="6"   width="5"  height="9"  rx="2" fill="#b8a880" opacity="0.6"/>
-  <rect x="48" y="6"   width="5"  height="9"  rx="2" fill="#b8a880" opacity="0.6"/>
-</g>
-<!-- Umbrella -->
-<line x1="128" y1="228" x2="116" y2="310" stroke="#7c7c7c" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M82 230 Q128 198 174 230" fill="#e8d5a0" opacity="0.55"/>
-<line x1="128" y1="228" x2="128" y2="233" stroke="#7c7c7c" stroke-width="2.5" stroke-linecap="round"/>
-</svg>`;
+  return '<svg viewBox="0 0 900 310" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">'
+    + '<defs>'
+    + '<linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#020810"/><stop offset="100%" stop-color="#0a1828"/></linearGradient>'
+    + '<linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5e3d1c"/><stop offset="100%" stop-color="#3c2510"/></linearGradient>'
+    + '<radialGradient id="pw" cx="50%" cy="42%" r="68%">'
+      + '<stop offset="0%" stop-color="#00eeff" stop-opacity="0.9"/>'
+      + '<stop offset="30%" stop-color="#06b6d4"/>'
+      + '<stop offset="65%" stop-color="#0369a1"/>'
+      + '<stop offset="100%" stop-color="#01273f"/>'
+    + '</radialGradient>'
+    + '<radialGradient id="pg" cx="50%" cy="50%" r="55%">'
+      + '<stop offset="0%" stop-color="#22d3ee" stop-opacity="0.28"/>'
+      + '<stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>'
+    + '</radialGradient>'
+    + '<radialGradient id="uwl" cx="50%" cy="50%" r="50%">'
+      + '<stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>'
+      + '<stop offset="40%" stop-color="#7ff4ff" stop-opacity="0.4"/>'
+      + '<stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>'
+    + '</radialGradient>'
+    + '<radialGradient id="lg" cx="50%" cy="50%" r="50%">'
+      + '<stop offset="0%" stop-color="#fbbf24" stop-opacity="0.6"/>'
+      + '<stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>'
+    + '</radialGradient>'
+    + '</defs>'
+    + '<rect width="900" height="310" fill="url(#sg)"/>'
+    + stars
+    // hedge layers
+    + '<path d="M0,85 Q55,55 110,78 Q165,52 220,72 Q280,46 340,68 Q400,48 455,65 Q510,44 565,62 Q625,44 680,60 Q740,46 800,62 Q845,50 900,58 L900,148 L0,148 Z" fill="#031608" opacity="0.92"/>'
+    + '<path d="M0,98 Q45,70 90,92 Q140,66 195,86 Q255,62 315,80 Q375,60 435,78 Q495,58 555,76 Q615,58 675,74 Q735,58 800,74 L900,78 L900,155 L0,155 Z" fill="#052e16" opacity="0.96"/>'
+    + '<path d="M0,115 Q35,90 72,110 Q112,82 160,104 Q205,78 260,100 Q315,76 375,98 Q440,74 498,96 Q560,74 620,94 Q685,74 750,92 Q810,74 870,90 L900,92 L900,162 L0,162 Z" fill="#14532d"/>'
+    + '<ellipse cx="115" cy="132" rx="60" ry="28" fill="#063016" opacity="0.7"/>'
+    + '<ellipse cx="330" cy="129" rx="75" ry="32" fill="#063016" opacity="0.65"/>'
+    + '<ellipse cx="570" cy="127" rx="70" ry="30" fill="#063016" opacity="0.6"/>'
+    + '<ellipse cx="780" cy="130" rx="65" ry="29" fill="#063016" opacity="0.65"/>'
+    // deck
+    + '<rect x="0" y="157" width="900" height="153" fill="url(#dg)"/>'
+    + planks + grain
+    // pool rim + water
+    + '<ellipse cx="460" cy="180" rx="218" ry="94" fill="rgba(200,230,255,0.12)" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>'
+    + '<ellipse cx="460" cy="180" rx="212" ry="88" fill="url(#pw)"/>'
+    // underwater lights
+    + '<ellipse cx="350" cy="188" rx="50" ry="27" fill="url(#uwl)" opacity="0.6"/>'
+    + '<ellipse cx="575" cy="183" rx="42" ry="24" fill="url(#uwl)" opacity="0.52"/>'
+    + '<ellipse cx="460" cy="177" rx="38" ry="20" fill="url(#uwl)" opacity="0.32"/>'
+    // pool glow on deck
+    + '<ellipse cx="460" cy="220" rx="240" ry="52" fill="url(#pg)"/>'
+    + ripples
+    + '<text x="460" y="192" text-anchor="middle" fill="rgba(255,255,255,0.13)" font-family="sans-serif" font-size="11" font-weight="700" letter-spacing="4">POOL</text>'
+    // deck lamp left
+    + '<rect x="135" y="95" width="6" height="62" fill="#8b7050" rx="2"/>'
+    + '<ellipse cx="138" cy="95" rx="11" ry="5" fill="#e5c57a"/>'
+    + '<ellipse cx="138" cy="97" rx="32" ry="28" fill="url(#lg)" opacity="0.5"/>'
+    + '<ellipse cx="138" cy="162" rx="38" ry="12" fill="#fbbf24" opacity="0.07"/>'
+    // deck lamp right
+    + '<rect x="777" y="95" width="6" height="62" fill="#8b7050" rx="2"/>'
+    + '<ellipse cx="780" cy="95" rx="11" ry="5" fill="#e5c57a"/>'
+    + '<ellipse cx="780" cy="97" rx="32" ry="28" fill="url(#lg)" opacity="0.5"/>'
+    + '<ellipse cx="780" cy="162" rx="38" ry="12" fill="#fbbf24" opacity="0.07"/>'
+    // palm tree
+    + '<path d="M68,157 Q63,125 66,93 Q68,64 64,42" stroke="#4a3020" stroke-width="9" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q22,28 -8,48" stroke="#166534" stroke-width="4.5" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q42,22 56,-4" stroke="#166534" stroke-width="4.5" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q86,22 74,-4" stroke="#166534" stroke-width="4" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q106,30 132,50" stroke="#166534" stroke-width="4.5" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q12,42 -16,62" stroke="#15803d" stroke-width="3" fill="none" stroke-linecap="round"/>'
+    + '<path d="M64,42 Q116,44 140,66" stroke="#15803d" stroke-width="3" fill="none" stroke-linecap="round"/>'
+    // deck chairs
+    + '<g opacity="0.55"><rect x="238" y="212" width="48" height="19" rx="3" fill="#6b4c28"/><rect x="238" y="212" width="48" height="5" rx="2" fill="#8b6338"/><rect x="243" y="229" width="7" height="12" rx="2" fill="#4a3018"/><rect x="274" y="229" width="7" height="12" rx="2" fill="#4a3018"/></g>'
+    + '<g opacity="0.48"><rect x="600" y="216" width="42" height="17" rx="3" fill="#6b4c28"/><rect x="600" y="216" width="42" height="4" rx="2" fill="#8b6338"/><rect x="604" y="231" width="6" height="10" rx="2" fill="#4a3018"/><rect x="630" y="231" width="6" height="10" rx="2" fill="#4a3018"/></g>'
+    + '</svg>';
 }
 
 // ── Tech SVG ─────────────────────────────────────────────────────────────────
 function buildTechSvg(running, warning, powerStr, freqStr) {
-  const sc = warning ? '#ef4444' : running ? '#22d3ee' : '#64748b';
-  const st = warning ? 'Warnung' : running ? 'Laufend' : 'Gestoppt';
-
-  const impeller = running
-    ? `<g class="pump-spin">
-        <line x1="96" y1="85" x2="96" y2="101" stroke="${sc}" stroke-width="3" stroke-linecap="round"/>
-        <line x1="96" y1="101" x2="96" y2="117" stroke="${sc}" stroke-width="3" stroke-linecap="round"/>
-        <line x1="80" y1="101" x2="96" y2="101" stroke="${sc}" stroke-width="3" stroke-linecap="round"/>
-        <line x1="96" y1="101" x2="112" y2="101" stroke="${sc}" stroke-width="3" stroke-linecap="round"/>
-      </g>`
-    : `<circle cx="96" cy="101" r="7" fill="#374151" stroke="#4a5568" stroke-width="1"/>`;
-
-  const pumpGlow = running
-    ? `<circle cx="96" cy="101" r="30" fill="${sc}" fill-opacity="0.12"/>`
+  var pc  = running ? '#22d3ee' : (warning ? '#ef4444' : '#475569');
+  var pg  = running ? '0.35' : '0';
+  var stx = running ? 'LÄUFT' : (warning ? 'WARNUNG' : 'STOP');
+  var impStyle = running
+    ? 'style="animation:spin 0.9s linear infinite;transform-origin:52px 88px;transform-box:fill-box"'
     : '';
+  var flowArrows = running
+    ? '<polygon points="133,117 143,121 133,125" fill="#22d3ee" opacity="0.7"/>'
+      + '<polygon points="208,117 218,121 208,125" fill="#22d3ee" opacity="0.6"/>'
+    : '';
+  var pw_str = powerStr
+    ? '<text x="20" y="184" fill="#3d5068" font-family="monospace" font-size="7.5">LEISTUNG</text>'
+      + '<text x="20" y="200" fill="' + (running ? '#f59e0b' : '#475569') + '" font-family="monospace" font-size="13" font-weight="700">' + powerStr + '</text>'
+    : '<text x="20" y="193" fill="#2d3f55" font-family="monospace" font-size="8">LEISTUNG  –</text>';
+  var fq_str = freqStr
+    ? '<text x="175" y="184" fill="#3d5068" font-family="monospace" font-size="7.5">FREQUENZ</text>'
+      + '<text x="175" y="200" fill="' + (running ? '#22d3ee' : '#475569') + '" font-family="monospace" font-size="13" font-weight="700">' + freqStr + '</text>'
+    : '<text x="175" y="193" fill="#2d3f55" font-family="monospace" font-size="8">FREQUENZ  –</text>';
 
-  return `<svg viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <linearGradient id="tMetal" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#4a5568"/>
-    <stop offset="50%" stop-color="#2d3748"/>
-    <stop offset="100%" stop-color="#1a202c"/>
-  </linearGradient>
-  <linearGradient id="tFilterBody" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#374151"/>
-    <stop offset="100%" stop-color="#1f2937"/>
-  </linearGradient>
-</defs>
+  var dFillLvlPh  = running ? 62 : 68;
+  var dFillHPh    = running ? 37 : 31;
+  var dFillLvlCl  = running ? 60 : 66;
+  var dFillHCl    = running ? 39 : 33;
 
-<!-- ── POOLPUMPE ── -->
-<!-- Motor body -->
-<rect x="15" y="80" width="65" height="42" rx="5" fill="url(#tMetal)" stroke="#4a5568" stroke-width="1"/>
-<!-- Ventilation ribs -->
-<rect x="23" y="83" width="4" height="36" rx="1" fill="#374151" opacity="0.7"/>
-<rect x="32" y="83" width="4" height="36" rx="1" fill="#374151" opacity="0.7"/>
-<rect x="41" y="83" width="4" height="36" rx="1" fill="#374151" opacity="0.7"/>
-<rect x="50" y="83" width="4" height="36" rx="1" fill="#374151" opacity="0.7"/>
-<rect x="59" y="83" width="4" height="36" rx="1" fill="#374151" opacity="0.7"/>
-<!-- Impeller housing -->
-<circle cx="96" cy="101" r="26" fill="#2a3544" stroke="#4a5568" stroke-width="1.5"/>
-<circle cx="96" cy="101" r="18" fill="#1a2535"/>
-${pumpGlow}
-${impeller}
-<!-- Status dot -->
-<circle cx="22" cy="85" r="4.5" fill="${sc}" ${running ? `style="filter:drop-shadow(0 0 4px ${sc})"` : ''}/>
-<!-- Outlet pipe (top) -->
-<rect x="89" y="57" width="10" height="24" rx="3" fill="#374151" stroke="#4a5568" stroke-width="0.8"/>
-<!-- Inlet pipe (bottom) -->
-<rect x="89" y="127" width="10" height="19" rx="3" fill="#374151" stroke="#4a5568" stroke-width="0.8"/>
-<!-- Label -->
-<text x="58" y="163" text-anchor="middle" fill="#6b7280" font-size="10" font-weight="600" font-family="sans-serif">Poolpumpe</text>
-<text x="58" y="178" text-anchor="middle" fill="${sc}" font-size="11" font-weight="700" font-family="sans-serif">${st}</text>
-${powerStr ? `<text x="58" y="191" text-anchor="middle" fill="#4a5568" font-size="9" font-family="sans-serif">${powerStr}</text>` : ''}
-${freqStr  ? `<text x="58" y="202" text-anchor="middle" fill="#4a5568" font-size="9" font-family="sans-serif">${freqStr}</text>`  : ''}
-
-<!-- ── PIPES ── -->
-<rect x="91" y="34" width="8"  height="24" rx="3" fill="#374151" stroke="#4a5568" stroke-width="0.8"/>
-<rect x="99" y="34" width="65" height="8"  rx="3" fill="#374151" stroke="#4a5568" stroke-width="0.8"/>
-<rect x="156" y="34" width="8" height="40" rx="3" fill="#374151" stroke="#4a5568" stroke-width="0.8"/>
-
-<!-- ── SANDFILTER ── -->
-<!-- Vessel body -->
-<rect x="148" y="68" width="52" height="88" rx="4" fill="url(#tFilterBody)" stroke="#4a5568" stroke-width="1.5"/>
-<!-- Top dome -->
-<ellipse cx="174" cy="68" rx="26" ry="13" fill="#2d3748" stroke="#4a5568" stroke-width="1.5"/>
-<!-- Bottom dome -->
-<ellipse cx="174" cy="156" rx="26" ry="11" fill="#252f3d" stroke="#4a5568" stroke-width="1"/>
-<!-- Multiport valve -->
-<rect x="167" y="52" width="14" height="17" rx="3" fill="#374151" stroke="#4a5568" stroke-width="1"/>
-<circle cx="174" cy="56" r="5" fill="#2a3544" stroke="#64748b" stroke-width="1"/>
-<!-- Pressure gauge -->
-<circle cx="197" cy="100" r="8" fill="#1a2535" stroke="#64748b" stroke-width="1.5"/>
-<circle cx="197" cy="100" r="5" fill="#0f172a"/>
-<line x1="197" y1="100" x2="200" y2="96" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round"/>
-<!-- Base legs -->
-<rect x="157" y="165" width="8" height="18" rx="2" fill="#2d3748"/>
-<rect x="178" y="165" width="8" height="18" rx="2" fill="#2d3748"/>
-<!-- Label -->
-<text x="174" y="198" text-anchor="middle" fill="#6b7280" font-size="10" font-weight="600" font-family="sans-serif">Sandfilter</text>
-
-<!-- ── DOSIERANLAGE ── -->
-<!-- Unit 1 — pH (blue) -->
-<rect x="240" y="68" width="28" height="52" rx="5" fill="#1e3a5f" stroke="#2563eb" stroke-width="1.5"/>
-<rect x="245" y="56" width="18" height="14" rx="3" fill="#1d4ed8" stroke="#3b82f6" stroke-width="1"/>
-<rect x="248" y="60" width="12" height="6"  rx="2" fill="#2563eb"/>
-<!-- Liquid level -->
-<rect x="242" y="95" width="24" height="18" rx="2" fill="#3b82f6" opacity="0.32"/>
-<!-- Tube -->
-<rect x="252" y="120" width="4" height="18" rx="2" fill="#374151"/>
-<!-- Unit 2 — Cl (red) -->
-<rect x="278" y="68" width="28" height="52" rx="5" fill="#5f1e1e" stroke="#dc2626" stroke-width="1.5"/>
-<rect x="283" y="56" width="18" height="14" rx="3" fill="#b91c1c" stroke="#ef4444" stroke-width="1"/>
-<rect x="286" y="60" width="12" height="6"  rx="2" fill="#dc2626"/>
-<!-- Liquid level -->
-<rect x="280" y="105" width="24" height="8"  rx="2" fill="#ef4444" opacity="0.28"/>
-<!-- Tube -->
-<rect x="290" y="120" width="4" height="18" rx="2" fill="#374151"/>
-<!-- Labels -->
-<text x="283" y="155" text-anchor="middle" fill="#6b7280" font-size="10" font-weight="600" font-family="sans-serif">Dosieranlage</text>
-<text x="254" y="170" text-anchor="middle" fill="#3b82f6" font-size="9" font-weight="600" font-family="sans-serif">pH+</text>
-<text x="292" y="170" text-anchor="middle" fill="#ef4444" font-size="9" font-weight="600" font-family="sans-serif">Cl</text>
-</svg>`;
+  return '<svg viewBox="0 0 320 225" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs>'
+    + '<radialGradient id="tpg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="' + pc + '" stop-opacity="' + pg + '"/><stop offset="100%" stop-color="' + pc + '" stop-opacity="0"/></radialGradient>'
+    + '<linearGradient id="cg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1a2535"/><stop offset="50%" stop-color="#243044"/><stop offset="100%" stop-color="#1a2535"/></linearGradient>'
+    + '</defs>'
+    + '<rect width="320" height="225" fill="rgba(0,0,0,0.08)" rx="8"/>'
+    // PUMP
+    + '<ellipse cx="52" cy="88" rx="52" ry="52" fill="url(#tpg)"/>'
+    + '<circle cx="52" cy="88" r="38" fill="#131f2e" stroke="' + pc + '" stroke-width="' + (running ? '1.8' : '1') + '" opacity="' + (running ? '1' : '0.65') + '"/>'
+    + '<circle cx="52" cy="88" r="26" fill="#0a1422" stroke="#1e2d3d" stroke-width="1"/>'
+    + '<g ' + impStyle + '>'
+    + '<line x1="52" y1="64" x2="52" y2="88" stroke="' + pc + '" stroke-width="3" stroke-linecap="round" opacity="0.9"/>'
+    + '<line x1="52" y1="88" x2="68" y2="99" stroke="' + pc + '" stroke-width="3" stroke-linecap="round" opacity="0.9"/>'
+    + '<line x1="52" y1="88" x2="36" y2="99" stroke="' + pc + '" stroke-width="3" stroke-linecap="round" opacity="0.9"/>'
+    + '<circle cx="52" cy="88" r="6" fill="' + pc + '" opacity="0.95"/>'
+    + '</g>'
+    + '<rect x="90" y="84" width="16" height="8" rx="2" fill="#1e2d3d" stroke="#334155" stroke-width="0.5"/>'
+    + '<rect x="-2" y="84" width="16" height="8" rx="2" fill="#1e2d3d" stroke="#334155" stroke-width="0.5" transform="translate(48,0)"/>'
+    + '<circle cx="52" cy="50" r="5" fill="' + pc + '" opacity="0.9"/>'
+    + '<circle cx="52" cy="50" r="9" fill="' + pc + '" opacity="' + (running ? '0.28' : '0.08') + '"/>'
+    + '<text x="52" y="142" text-anchor="middle" fill="#3d5068" font-family="sans-serif" font-size="8.5" font-weight="700" letter-spacing="1">POOLPUMPE</text>'
+    + '<text x="52" y="153" text-anchor="middle" fill="' + pc + '" font-family="sans-serif" font-size="7.5" font-weight="700">' + stx + '</text>'
+    // SAND FILTER
+    + '<rect x="128" y="28" width="48" height="98" rx="8" fill="url(#cg)" stroke="#2d3d50" stroke-width="1"/>'
+    + '<ellipse cx="152" cy="28" rx="24" ry="11" fill="#1e2d3d" stroke="#2d3d50" stroke-width="1"/>'
+    + '<ellipse cx="152" cy="126" rx="24" ry="9" fill="#14202e" stroke="#2d3d50" stroke-width="1"/>'
+    + '<circle cx="152" cy="50" r="13" fill="#0a1422" stroke="#3d5068" stroke-width="1"/>'
+    + '<circle cx="152" cy="50" r="10" fill="#070e18"/>'
+    + '<line x1="152" y1="50" x2="' + (running ? '158' : '155') + '" y2="' + (running ? '43' : '45') + '" stroke="' + (running ? '#22d3ee' : '#3d5068') + '" stroke-width="2" stroke-linecap="round"/>'
+    + '<rect x="133" y="72" width="38" height="42" rx="3" fill="#162415" opacity="0.9"/>'
+    + '<rect x="134" y="73" width="36" height="12" rx="2" fill="#1f3b18" opacity="0.8"/>'
+    + '<rect x="138" y="17" width="8" height="14" rx="2" fill="#1e2d3d"/>'
+    + '<rect x="158" y="17" width="8" height="14" rx="2" fill="#1e2d3d"/>'
+    + '<rect x="131" y="124" width="8" height="10" rx="2" fill="#1e2d3d"/>'
+    + '<rect x="165" y="124" width="8" height="10" rx="2" fill="#1e2d3d"/>'
+    + '<circle cx="166" cy="32" r="4" fill="' + (running ? '#22d3ee' : '#1e2d3d') + '" opacity="0.9"/>'
+    + '<text x="152" y="150" text-anchor="middle" fill="#3d5068" font-family="sans-serif" font-size="8.5" font-weight="700" letter-spacing="1">SANDFILTER</text>'
+    // DOSING
+    + '<rect x="224" y="28" width="26" height="74" rx="5" fill="#162238" stroke="#1d4ed8" stroke-width="1"/>'
+    + '<rect x="228" y="18" width="18" height="14" rx="3" fill="#162238" stroke="#1d4ed8" stroke-width="1"/>'
+    + '<rect x="232" y="10" width="10" height="11" rx="2" fill="#2563eb"/>'
+    + '<rect x="226" y="' + dFillLvlPh + '" width="20" height="' + dFillHPh + '" rx="3" fill="#1d4ed8" opacity="0.45"/>'
+    + '<text x="237" y="75" text-anchor="middle" fill="#93c5fd" font-family="sans-serif" font-size="8.5" font-weight="700">pH</text>'
+    + '<text x="237" y="86" text-anchor="middle" fill="#60a5fa" font-family="sans-serif" font-size="6.5">Minus</text>'
+    + '<rect x="258" y="28" width="26" height="74" rx="5" fill="#2a1010" stroke="#dc2626" stroke-width="1"/>'
+    + '<rect x="262" y="18" width="18" height="14" rx="3" fill="#2a1010" stroke="#dc2626" stroke-width="1"/>'
+    + '<rect x="266" y="10" width="10" height="11" rx="2" fill="#ef4444"/>'
+    + '<rect x="260" y="' + dFillLvlCl + '" width="20" height="' + dFillHCl + '" rx="3" fill="#ef4444" opacity="0.38"/>'
+    + '<text x="271" y="75" text-anchor="middle" fill="#fca5a5" font-family="sans-serif" font-size="8.5" font-weight="700">Cl</text>'
+    + '<text x="271" y="86" text-anchor="middle" fill="#f87171" font-family="sans-serif" font-size="6.5">Redox</text>'
+    + '<rect x="222" y="108" width="64" height="20" rx="4" fill="#0f1c2e" stroke="#1e2d3d" stroke-width="1"/>'
+    + '<circle cx="236" cy="118" r="6" fill="#0a1422" stroke="#334155" stroke-width="1"/>'
+    + '<circle cx="260" cy="118" r="6" fill="#0a1422" stroke="#334155" stroke-width="1"/>'
+    + '<circle cx="248" cy="118" r="5" fill="' + (running ? '#22d3ee' : '#1e2d3d') + '" opacity="0.85"/>'
+    + '<text x="254" y="150" text-anchor="middle" fill="#3d5068" font-family="sans-serif" font-size="8.5" font-weight="700" letter-spacing="1">DOSIERUNG</text>'
+    // Pipes
+    + '<path d="M106,121 L130,121" stroke="#1e2d3d" stroke-width="5" stroke-linecap="round"/>'
+    + '<path d="M106,118 L130,118" stroke="#334155" stroke-width="1.5"/>'
+    + '<path d="M176,121 L220,121" stroke="#1e2d3d" stroke-width="5" stroke-linecap="round"/>'
+    + '<path d="M176,118 L220,118" stroke="#334155" stroke-width="1.5"/>'
+    + flowArrows
+    // Bottom bar
+    + '<rect x="8" y="170" width="304" height="45" rx="6" fill="rgba(0,0,0,.3)" stroke="rgba(255,255,255,.04)" stroke-width="1"/>'
+    + pw_str + fq_str
+    + '</svg>';
 }
 
-// ── Card Class ────────────────────────────────────────────────────────────────
+// ── Card class ────────────────────────────────────────────────────────────────
 class PoolControlCenterCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass = null;
-    this._config = {};
+    this._hass   = null;
+    this._config = { title: 'Pool Control Center' };
+    this._E      = null;
+    LOG.info('Card created', 'v' + CARD_VERSION);
   }
 
   static getStubConfig() { return { title: 'Pool Control Center' }; }
 
   setConfig(config) {
-    this._config = { title: 'Pool Control Center', ...config };
+    this._config = Object.assign({ title: 'Pool Control Center' }, config);
   }
 
   set hass(hass) {
     this._hass = hass;
+    if (!this._E) this._resolveEntities();
     this._render();
   }
 
-  _s(id)       { return this._hass?.states?.[id] ?? null; }
-  _isOn(id)    { return this._s(id)?.state === 'on'; }
-  _unit(id)    { return this._s(id)?.attributes?.unit_of_measurement ?? ''; }
+  _resolveEntities() {
+    var st = this._hass && this._hass.states;
+    if (!st) return;
 
-  _val(id, fb = '–') {
-    const s = this._s(id);
-    if (!s || ['unavailable', 'unknown', 'none'].includes(s.state)) return fb;
+    var resolved = Object.assign({}, ENTITY_DEFAULTS);
+
+    var keys = Object.keys(ENTITY_FALLBACKS);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      if (!st[resolved[key]]) {
+        var alts = ENTITY_FALLBACKS[key];
+        for (var ai = 0; ai < alts.length; ai++) {
+          if (st[alts[ai]]) {
+            LOG.debug('Entity remapped:', key, '->', alts[ai]);
+            resolved[key] = alts[ai];
+            break;
+          }
+        }
+      }
+    }
+
+    this._E = resolved;
+
+    var entryKeys = Object.keys(resolved);
+    var found   = entryKeys.filter(function(k) { return !!st[resolved[k]]; }).map(function(k) { return resolved[k]; });
+    var missing  = entryKeys.filter(function(k) { return !st[resolved[k]]; }).map(function(k) { return resolved[k]; });
+    LOG.debug('Entities found (' + found.length + '):', found);
+    if (missing.length) LOG.debug('Entities not yet in HA states (' + missing.length + '):', missing);
+  }
+
+  _s(id)     { return (this._hass && this._hass.states && this._hass.states[id]) || null; }
+  _isOn(id)  { var s = this._s(id); return s ? s.state === 'on' : false; }
+  _unit(id)  { var s = this._s(id); return (s && s.attributes && s.attributes.unit_of_measurement) || ''; }
+
+  _val(id, fb) {
+    if (fb === undefined) fb = '–';
+    var s = this._s(id);
+    if (!s || s.state === 'unavailable' || s.state === 'unknown' || s.state === 'none') return fb;
     return s.state;
   }
 
-  _num(id, dec = 1, fb = '–') {
-    const v = this._val(id, null);
+  _num(id, dec, fb) {
+    if (dec === undefined) dec = 1;
+    if (fb  === undefined) fb  = '–';
+    var v = this._val(id, null);
     if (v === null) return fb;
-    const n = parseFloat(v);
+    var n = parseFloat(v);
     return isNaN(n) ? fb : n.toFixed(dec);
   }
 
   _fmtH(raw) {
     if (raw === null || raw === undefined || raw === '–') return '–';
-    const h = parseFloat(raw);
+    var h = parseFloat(raw);
     if (isNaN(h)) return '–';
-    if (h < 0.1) return `${Math.round(h * 60)} min`;
-    return `${h.toFixed(1)} h`;
+    if (h < 0.1)  return Math.round(h * 60) + ' min';
+    return h.toFixed(1) + ' h';
   }
 
   _fmtTime(entityId) {
-    const s = this._s(entityId);
-    if (!s || ['unavailable', 'unknown'].includes(s.state)) return '–';
+    var s = this._s(entityId);
+    if (!s || s.state === 'unavailable' || s.state === 'unknown') return '–';
     try {
-      const d   = new Date(s.state);
-      const now = new Date();
-      const t   = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-      return d.toDateString() === now.toDateString() ? `Heute, ${t}` : t;
+      var d   = new Date(s.state);
+      var now = new Date();
+      var t   = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      return d.toDateString() === now.toDateString() ? 'Heute, ' + t : t;
     } catch (_) { return s.state; }
   }
 
+  _svc(domain, service, data) {
+    if (!this._hass) { LOG.warn('callService skipped – hass not ready'); return; }
+    LOG.debug('callService:', domain + '.' + service, data);
+    var p = this._hass.callService(domain, service, data);
+    if (p && typeof p.then === 'function') {
+      p.then(null, function(err) { LOG.warn('Service call FAILED:', domain + '.' + service, err); });
+    }
+  }
+
   _render() {
-    if (!this._hass) return;
+    if (!this._hass || !this._E) return;
 
-    const running     = this._isOn(E.running);
-    const warning     = this._isOn(E.warning);
-    const autoOn      = this._isOn(E.automation);
-    const status      = this._val(E.status, 'unknown');
-    const season      = this._val(E.seasonMode, 'auto');
-    const sColor      = STATUS_COLOR[status] ?? '#64748b';
-    const sLabel      = STATUS_LABEL[status] ?? status;
-    const seaColor    = SEASON_COLOR[season]  ?? '#94a3b8';
+    var E = this._E;
 
-    const powerStr = this._num(E.power, 0) !== '–'
-      ? `${this._num(E.power, 0)} ${this._unit(E.power) || 'W'}` : null;
-    const freqStr  = this._num(E.frequency, 0) !== '–'
-      ? `${this._num(E.frequency, 0)} ${this._unit(E.frequency) || 'Hz'}` : null;
+    var running  = this._isOn(E.running);
+    var warning  = this._isOn(E.warning);
+    var autoOn   = this._isOn(E.automation);
+    var status   = this._val(E.status, 'unknown');
+    var season   = this._val(E.seasonMode, 'auto');
+    var sColor   = STATUS_COLOR[status]  || '#64748b';
+    var sLabel   = STATUS_LABEL[status]  || status;
+    var seaColor = SEASON_COLOR[season]  || '#94a3b8';
+    var seaIcon  = SEASON_ICON[season]   || '🔄';
+    var seaLabel = SEASON_LABEL[season]  || season;
 
-    const effVal = parseFloat(this._val(E.efficiency, '0'));
-    const effPct = isNaN(effVal) ? 0 : Math.min(100, Math.max(0, effVal));
+    var powerStr = this._num(E.power, 0) !== '–'
+      ? this._num(E.power, 0) + ' ' + (this._unit(E.power) || 'W') : null;
+    var freqStr  = this._num(E.frequency, 0) !== '–'
+      ? this._num(E.frequency, 0) + ' ' + (this._unit(E.frequency) || 'Hz') : null;
 
-    // Panel row helper
-    const pr = (icon, label, value, unit = '') => {
-      const valHtml = (value === null || value === undefined || value === '–' || value === '')
-        ? `<span class="not-cfg">Nicht konfiguriert</span>`
-        : `<span class="prow-value">${value}${unit ? `<span style="font-size:.7em;color:#64748b;margin-left:2px">${unit}</span>` : ''}</span>`;
-      return `<div class="prow"><span class="prow-label">${icon} ${label}</span>${valHtml}</div>`;
+    var effRaw = parseFloat(this._val(E.efficiency, '0'));
+    var effPct = isNaN(effRaw) ? 0 : Math.min(100, Math.max(0, effRaw));
+
+    var todayRaw  = this._val(E.runtimeToday, null);
+    var targetRaw = this._val(E.target, null);
+    var progPct   = 0;
+    if (todayRaw && targetRaw) {
+      var t = parseFloat(todayRaw), r = parseFloat(targetRaw);
+      if (!isNaN(t) && !isNaN(r) && r > 0) progPct = Math.min(100, (t / r) * 100);
+    }
+
+    var phVal    = this._val(E.ph, null);
+    var redoxVal = this._val(E.redox, null);
+    var tempVal  = this._val(E.temperature, null);
+
+    var pv = function(icon, label, value, unit) {
+      var u = unit || '';
+      var valHtml = (value === null || value === undefined || value === '–' || value === '')
+        ? '<span class="not-cfg">Nicht konfiguriert</span>'
+        : '<span class="prow-value">' + value + (u ? '<span style="font-size:.68em;color:#475569;margin-left:2px">' + u + '</span>' : '') + '</span>';
+      return '<div class="prow"><span class="prow-label">' + icon + ' ' + label + '</span>' + valHtml + '</div>';
     };
 
-    const phVal    = this._val(E.ph, null);
-    const redoxVal = this._val(E.redox, null);
-    const tempVal  = this._val(E.temperature, null);
+    var seasonBtns = SEASON_MODES.map(function(m) {
+      var active = (season === m) ? ' active' : '';
+      return '<button class="sbtn' + active + '" data-season="' + m + '">' + SEASON_ICON[m] + '<br>' + SEASON_LABEL[m] + '</button>';
+    }).join('');
 
-    this.shadowRoot.innerHTML = `
-<style>${CSS}</style>
-<div class="pcc">
+    var pulseDotSpan = running
+      ? ' <span class="pulse-dot" style="display:inline-block;vertical-align:middle;margin-left:3px;width:7px;height:7px"></span>'
+      : '';
 
-<!-- ── HEADER ── -->
-<div class="pcc-header">
-  <div class="pcc-title">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M2 12c1.5-3 4-4.5 6-4.5s4.5 1.5 6 1.5 4.5-1.5 6-1.5"/>
-      <path d="M2 17c1.5-3 4-4.5 6-4.5s4.5 1.5 6 1.5 4.5-1.5 6-1.5"/>
-    </svg>
-    ${this._config.title ?? 'Pool Control Center'}
-  </div>
-  <div class="badge ${autoOn ? 'badge-auto-on' : 'badge-auto-off'}" id="btn-auto-badge">
-    🔄 Automatikmodus
-    <div class="pulse-dot ${autoOn ? '' : 'off'}"></div>
-  </div>
-  <div class="badge badge-season" id="btn-season-badge">
-    ${SEASON_ICON[season] ?? '🔄'} Saison: ${SEASON_LABEL[season] ?? season}
-  </div>
-  <div class="version-label">PPM v${CARD_VERSION}</div>
-</div>
+    this.shadowRoot.innerHTML = '<style>' + CSS + '</style>'
+      + '<div class="pcc">'
 
-${warning ? `<div class="warn">⚠️ Pumpe eingeschaltet – Leistungsaufnahme &lt;100 W erkannt. Pumpe und Verkabelung prüfen!</div>` : ''}
+      // HEADER
+      + '<div class="pcc-header">'
+      + '<div class="pcc-title">'
+      + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M2 12c1.5-3 4-4.5 6-4.5s4.5 1.5 6 1.5 4.5-1.5 6-1.5"/>'
+      + '<path d="M2 17c1.5-3 4-4.5 6-4.5s4.5 1.5 6 1.5 4.5-1.5 6-1.5"/>'
+      + '</svg>'
+      + (this._config.title || 'Pool Control Center')
+      + '</div>'
+      + '<div class="badge ' + (autoOn ? 'badge-auto-on' : 'badge-auto-off') + '" id="btn-auto-badge" title="Automatikmodus umschalten">'
+      + '<div class="pulse-dot' + (autoOn ? '' : ' off') + '"></div>'
+      + 'Automatik ' + (autoOn ? 'EIN' : 'AUS')
+      + '</div>'
+      + '<div class="badge badge-season" id="btn-season-badge" title="Saison wechseln" style="border-color:' + seaColor + '44;color:' + seaColor + '">'
+      + seaIcon + ' ' + seaLabel
+      + '</div>'
+      + '<div class="version-label">v' + CARD_VERSION + '</div>'
+      + '</div>'
 
-<!-- ── MAIN ROW ── -->
-<div class="main-row">
-  <div class="pool-area">${buildPoolSvg(running)}</div>
-  <div class="tech-area">
-    <div class="tech-title">≡ TECHNIK</div>
-    <div class="tech-svg-wrap">${buildTechSvg(running, warning, powerStr, freqStr)}</div>
-    <div class="tech-status ${running ? 'ts-running' : warning ? 'ts-warn' : ''}">
-      <span class="tech-status-label" style="color:${running ? '#22d3ee' : warning ? '#ef4444' : '#64748b'}">
-        ${running ? '▶ Laufend' : warning ? '⚠ Warnung' : '■ Gestoppt'}
-      </span>
-      <span class="tech-vals">
-        ${powerStr ? `<span>${powerStr}</span>` : ''}
-        ${freqStr  ? `<span>${freqStr}</span>`  : ''}
-      </span>
-    </div>
-  </div>
-</div>
+      // WARNING
+      + (warning ? '<div class="warn">⚠️ Pumpe aktiv – Leistungsaufnahme unter 100 W. Pumpe und Verkabelung prüfen!</div>' : '')
 
-<!-- ── STATUS TILES ── -->
-<div class="tiles-row">
-  <div class="tile">
-    <div class="tile-header"><span style="color:${sColor}">⏻</span> STATUS</div>
-    <div class="tile-value" style="color:${sColor};font-size:1.1rem">
-      ${sLabel}${running ? ` <span class="pulse-dot" style="display:inline-block;vertical-align:middle;margin-left:4px"></span>` : ''}
-    </div>
-  </div>
-  <div class="tile">
-    <div class="tile-header"><span style="color:#f59e0b">⚡</span> LEISTUNG</div>
-    <div class="tile-value">${this._num(E.power, 0)}<span class="tile-unit"> ${this._unit(E.power) || 'W'}</span></div>
-  </div>
-  <div class="tile">
-    <div class="tile-header"><span style="color:#22d3ee">〰</span> SPANNUNG</div>
-    <div class="tile-value">${this._num(E.voltage, 0)}<span class="tile-unit"> ${this._unit(E.voltage) || 'V'}</span></div>
-  </div>
-  <div class="tile">
-    <div class="tile-header"><span style="color:#a78bfa">〰</span> STROM</div>
-    <div class="tile-value">${this._num(E.current, 1)}<span class="tile-unit"> ${this._unit(E.current) || 'A'}</span></div>
-  </div>
-  <div class="tile">
-    <div class="tile-header"><span style="color:#38bdf8">〰</span> FREQUENZ</div>
-    <div class="tile-value">${this._num(E.frequency, 0)}<span class="tile-unit"> ${this._unit(E.frequency) || 'Hz'}</span></div>
-  </div>
-  <div class="tile">
-    <div class="tile-header"><span style="color:#4ade80">🌿</span> EFFIZIENZ</div>
-    <div class="tile-value">${this._num(E.efficiency, 0)}<span class="tile-unit"> %</span></div>
-  </div>
-  <div class="tile" style="border-right:none">
-    <div class="tile-header"><span style="color:#f59e0b">≡</span> ENERGIE</div>
-    <div class="tile-value">${this._num(E.energy, 2)}<span class="tile-unit"> ${this._unit(E.energy) || 'kWh'}</span></div>
-    <div class="tile-sub">heute</div>
-  </div>
-</div>
+      // MAIN ROW
+      + '<div class="main-row">'
+      + '<div class="pool-area">' + buildPoolSvg(running) + '</div>'
+      + '<div class="tech-area">'
+      + '<div class="tech-title">≡ Technik</div>'
+      + '<div class="tech-svg-wrap">' + buildTechSvg(running, warning, powerStr, freqStr) + '</div>'
+      + '<div class="tech-status">'
+      + '<span class="tech-status-label" style="color:' + (running ? '#22d3ee' : (warning ? '#ef4444' : '#475569')) + '">'
+      + (running ? '▶ Laufend' : (warning ? '⚠ Warnung' : '■ Gestoppt'))
+      + '</span>'
+      + '<span class="tech-vals">'
+      + (powerStr ? '<span>' + powerStr + '</span>' : '')
+      + (freqStr  ? '<span>' + freqStr  + '</span>' : '')
+      + '</span>'
+      + '</div></div></div>'
 
-<!-- ── PANELS ROW ── -->
-<div class="panels-row">
+      // STATUS TILES
+      + '<div class="tiles-row">'
+      + '<div class="tile"><div class="tile-header">⏻ Status</div>'
+      + '<div class="tile-value" style="color:' + sColor + ';font-size:1rem">' + sLabel + pulseDotSpan + '</div></div>'
 
-  <!-- LAUFZEITEN -->
-  <div class="panel">
-    <div class="panel-title">⏱ LAUFZEITEN</div>
-    ${pr('▶', 'Laufzeit heute',  this._fmtH(this._val(E.runtimeToday, null)))}
-    ${pr('⏳', 'Restlaufzeit',   this._fmtH(this._val(E.remaining,    null)))}
-    ${pr('🕐', 'Nächster Start', this._fmtTime(E.nextStart))}
-    ${pr('🎯', 'Tagesziel',      this._fmtH(this._val(E.target,       null)))}
-    <div class="pbar-bg"><div class="pbar-fill" style="width:${effPct}%"></div></div>
-    <div class="pbar-label">${Math.round(effPct)} %</div>
-  </div>
+      + '<div class="tile"><div class="tile-header">⚡ Leistung</div>'
+      + '<div class="tile-value">' + this._num(E.power, 0) + '<span class="tile-unit"> ' + (this._unit(E.power) || 'W') + '</span></div></div>'
 
-  <!-- SAISONMODUS -->
-  <div class="panel">
-    <div class="panel-title">☀️ SAISONMODUS</div>
-    <div class="season-display">
-      <div class="season-sublabel">Aktuelle Saison</div>
-      <div class="season-name" style="color:${seaColor}">${SEASON_LABEL[season] ?? season}</div>
-    </div>
-    ${pr('💧', 'Empf. Umwälzung',   this._val(E.target,       null) !== null ? this._num(E.target,       1) : null, 'h/Tag')}
-    ${pr('⚙',  'Eingest. Ziel',     this._val(E.runtimeToday, null) !== null ? this._num(E.runtimeToday, 1) : null, 'h/Tag')}
-    <button class="season-btn" id="btn-season-cycle">🔄 Saisonmodus: ${SEASON_LABEL[season] ?? season}</button>
-  </div>
+      + '<div class="tile"><div class="tile-header">〜 Spannung</div>'
+      + '<div class="tile-value">' + this._num(E.voltage, 0) + '<span class="tile-unit"> ' + (this._unit(E.voltage) || 'V') + '</span></div></div>'
 
-  <!-- WASSERQUALITÄT -->
-  <div class="panel">
-    <div class="panel-title">💧 WASSERQUALITÄT</div>
-    ${pr('🧪', 'pH-Wert',     phVal)}
-    ${pr('⚡', 'Redox',       redoxVal, redoxVal && redoxVal !== '–' ? 'mV' : '')}
-    ${pr('🌡', 'Temperatur',  tempVal,  tempVal  && tempVal  !== '–' ? '°C' : '')}
-    <div class="wq-note">Sensoren in zukünftiger Version</div>
-  </div>
+      + '<div class="tile"><div class="tile-header">〜 Strom</div>'
+      + '<div class="tile-value">' + this._num(E.current, 1) + '<span class="tile-unit"> ' + (this._unit(E.current) || 'A') + '</span></div></div>'
 
-  <!-- WARTUNG -->
-  <div class="panel">
-    <div class="panel-title">🔧 WARTUNG &amp; BETRIEBSSTUNDEN</div>
-    ${pr('♾',  'Gesamt',       this._fmtH(this._val(E.totalRuntime,  null)))}
-    ${pr('🌿', 'Saison',       this._fmtH(this._val(E.seasonRuntime, null)))}
-    ${pr('🔧', 'Seit Wartung', this._fmtH(this._val(E.maintenance,   null)))}
-    <div class="mbtn-row">
-      <button class="mbtn" id="btn-maint">🔧 Wartung Reset</button>
-      <button class="mbtn" id="btn-season-reset">🔄 Saison Reset</button>
-    </div>
-  </div>
+      + '<div class="tile"><div class="tile-header">〜 Frequenz</div>'
+      + '<div class="tile-value">' + this._num(E.frequency, 0) + '<span class="tile-unit"> ' + (this._unit(E.frequency) || 'Hz') + '</span></div></div>'
 
-  <!-- STEUERUNG -->
-  <div class="panel" style="border-right:none">
-    <div class="panel-title">⏻ STEUERUNG</div>
-    <div class="ctrl-toggle" id="btn-auto-toggle">
-      <span class="ctrl-toggle-label">
-        <span style="color:${autoOn ? '#4ade80' : '#64748b'}">⏻</span>
-        Auto ${autoOn ? 'EIN' : 'AUS'}
-      </span>
-      <div class="tog ${autoOn ? 'on' : 'off'}"><div class="tog-thumb"></div></div>
-    </div>
-    <button class="cbtn cbtn-start" id="btn-start">▶&nbsp; Start</button>
-    <button class="cbtn cbtn-stop"  id="btn-stop">■&nbsp; Stopp</button>
-  </div>
+      + '<div class="tile"><div class="tile-header">🌿 Effizienz</div>'
+      + '<div class="tile-value" style="color:#4ade80">' + this._num(E.efficiency, 0) + '<span class="tile-unit"> %</span></div></div>'
 
-</div>
+      + '<div class="tile"><div class="tile-header">≡ Energie</div>'
+      + '<div class="tile-value">' + this._num(E.energy, 2) + '<span class="tile-unit"> ' + (this._unit(E.energy) || 'kWh') + '</span></div></div>'
+      + '</div>'
 
-<!-- ── NAV FOOTER ── -->
-<div class="nav">
-  <div class="ntab active"><span class="ntab-icon">🏠</span>Übersicht</div>
-  <div class="ntab"><span class="ntab-icon">⏱</span>Laufzeiten</div>
-  <div class="ntab"><span class="ntab-icon">⚙</span>Einstellungen</div>
-  <div class="ntab"><span class="ntab-icon">🔧</span>Wartung</div>
-  <div class="ntab"><span class="ntab-icon">📊</span>Historie</div>
-  <div class="ntab" style="border-right:none"><span class="ntab-icon">ℹ</span>Info</div>
-</div>
+      // PROGRESS BAR
+      + '<div class="prog-wrap"><div class="prog-fill" style="width:' + progPct.toFixed(1) + '%"></div></div>'
 
-</div>`;
+      // PANELS
+      + '<div class="panels-row">'
+
+      // 1: Laufzeiten
+      + '<div class="panel"><div class="panel-title">Laufzeiten</div>'
+      + pv('🕐', 'Heute', this._fmtH(todayRaw))
+      + pv('🎯', 'Tagesziel', this._fmtH(targetRaw))
+      + pv('⏳', 'Verbleibend', this._fmtH(this._val(E.remaining, null)))
+      + pv('📅', 'Nächster Start', this._fmtTime(E.nextStart))
+      + pv('📊', 'Gesamt', this._fmtH(this._val(E.totalRuntime, null)))
+      + '</div>'
+
+      // 2: Saison
+      + '<div class="panel"><div class="panel-title">Saisonmodus</div>'
+      + '<div class="season-grid">' + seasonBtns + '</div>'
+      + pv('📅', 'Saison LZ', this._fmtH(this._val(E.seasonRuntime, null)))
+      + '</div>'
+
+      // 3: Wasserqualität
+      + '<div class="panel"><div class="panel-title">Wasserqualität</div>'
+      + pv('🌡', 'Temperatur', tempVal !== null ? this._num(E.temperature, 1) : null, this._unit(E.temperature) || '°C')
+      + pv('🧪', 'pH-Wert', phVal)
+      + pv('⚡', 'Redox', redoxVal !== null ? this._num(E.redox, 0) : null, this._unit(E.redox) || 'mV')
+      + '</div>'
+
+      // 4: Wartung
+      + '<div class="panel"><div class="panel-title">Wartung</div>'
+      + pv('🔧', 'Seit Wartung', this._fmtH(this._val(E.maintenance, null)))
+      + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">'
+      + '<button class="mbtn" id="btn-maint">🔧 Wartung Reset</button>'
+      + '<button class="mbtn" id="btn-season-reset">📅 Saison Reset</button>'
+      + '</div></div>'
+
+      // 5: Steuerung
+      + '<div class="panel"><div class="panel-title">Steuerung</div>'
+      + '<div class="ctrl-toggle" id="btn-auto-toggle">'
+      + '<span class="ctrl-label' + (autoOn ? ' on' : '') + '">Automatik</span>'
+      + '<div class="toggle-track' + (autoOn ? ' on' : '') + '"><div class="toggle-thumb"></div></div>'
+      + '</div>'
+      + '<button class="cbtn cbtn-start" id="btn-start">▶ Start</button>'
+      + '<button class="cbtn cbtn-stop"  id="btn-stop">■ Stop</button>'
+      + '</div>'
+
+      + '</div>' // panels-row
+
+      // NAV FOOTER
+      + '<div class="nav-footer">'
+      + '<div class="nav-tab active">Dashboard</div>'
+      + '<div class="nav-tab">Verlauf</div>'
+      + '<div class="nav-tab">Saison</div>'
+      + '<div class="nav-tab">Wartung</div>'
+      + '<div class="nav-tab">Qualität</div>'
+      + '<div class="nav-tab">Einst.</div>'
+      + '</div>'
+
+      + '</div>'; // pcc
 
     this._attach();
   }
 
   _attach() {
-    const root = this.shadowRoot;
-    const $    = id => root.getElementById(id);
-    const svc  = (domain, service, data) => this._hass.callService(domain, service, data);
+    var root = this.shadowRoot;
+    var self = this;
+    var E    = this._E;
 
-    const toggleAuto = () => svc('switch', this._isOn(E.automation) ? 'turn_off' : 'turn_on', { entity_id: E.automation });
+    var $ = function(id) { return root.getElementById(id); };
 
-    $('btn-auto-badge')?.addEventListener('click', toggleAuto);
-    $('btn-auto-toggle')?.addEventListener('click', toggleAuto);
-
-    $('btn-start')?.addEventListener('click', () => svc('pool_pump_manager', 'start_now', {}));
-    $('btn-stop')?.addEventListener('click',  () => svc('pool_pump_manager', 'stop_now',  {}));
-
-    $('btn-maint')?.addEventListener('click',        () => svc('button', 'press', { entity_id: E.btnMaint  }));
-    $('btn-season-reset')?.addEventListener('click', () => svc('button', 'press', { entity_id: E.btnSeason }));
-
-    const cycleSeason = () => {
-      const cur  = this._val(E.seasonMode, 'auto');
-      const next = SEASON_MODES[(SEASON_MODES.indexOf(cur) + 1) % SEASON_MODES.length];
-      this._hass.callService('select', 'select_option', { entity_id: E.seasonMode, option: next });
+    var fx = function(el) {
+      if (!el) return;
+      el.classList.remove('fx');
+      void el.offsetWidth;
+      el.classList.add('fx');
     };
-    $('btn-season-badge')?.addEventListener('click', cycleSeason);
-    $('btn-season-cycle')?.addEventListener('click', cycleSeason);
+
+    var toggleAuto = function() {
+      var isOn = self._isOn(E.automation);
+      LOG.debug('Automatik toggle – aktuell:', isOn ? 'EIN' : 'AUS');
+      self._svc('switch', isOn ? 'turn_off' : 'turn_on', { entity_id: E.automation });
+    };
+
+    var badge = $('btn-auto-badge');
+    var tog   = $('btn-auto-toggle');
+    if (badge) badge.addEventListener('click', toggleAuto);
+    if (tog)   tog.addEventListener('click', function() { fx(tog); toggleAuto(); });
+
+    var bStart = $('btn-start');
+    var bStop  = $('btn-stop');
+    if (bStart) bStart.addEventListener('click', function() {
+      fx(bStart);
+      LOG.debug('Start geklickt');
+      self._svc('pool_pump_manager', 'start_now', {});
+    });
+    if (bStop) bStop.addEventListener('click', function() {
+      fx(bStop);
+      LOG.debug('Stop geklickt');
+      self._svc('pool_pump_manager', 'stop_now', {});
+    });
+
+    var bMaint = $('btn-maint');
+    var bSeaR  = $('btn-season-reset');
+    if (bMaint) bMaint.addEventListener('click', function() {
+      fx(bMaint);
+      LOG.debug('Wartung Reset geklickt');
+      self._svc('button', 'press', { entity_id: E.btnMaint });
+    });
+    if (bSeaR) bSeaR.addEventListener('click', function() {
+      fx(bSeaR);
+      LOG.debug('Saison Reset geklickt');
+      self._svc('button', 'press', { entity_id: E.btnSeason });
+    });
+
+    var cycleSeason = function() {
+      var cur  = self._val(E.seasonMode, 'auto');
+      var next = SEASON_MODES[(SEASON_MODES.indexOf(cur) + 1) % SEASON_MODES.length];
+      LOG.debug('Saison cycle:', cur, '->', next);
+      self._svc('select', 'select_option', { entity_id: E.seasonMode, option: next });
+    };
+
+    var seaBadge = $('btn-season-badge');
+    if (seaBadge) seaBadge.addEventListener('click', cycleSeason);
+
+    root.querySelectorAll('.sbtn[data-season]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var opt = this.getAttribute('data-season');
+        LOG.debug('Saison direkt gewählt:', opt);
+        self._svc('select', 'select_option', { entity_id: E.seasonMode, option: opt });
+      });
+    });
   }
 
   getCardSize() { return 10; }
@@ -874,17 +971,17 @@ if (!customElements.get('pool-control-center-card')) {
   customElements.define('pool-control-center-card', PoolControlCenterCard);
   console.info(
     '%c POOL CONTROL CENTER %c v' + CARD_VERSION + ' ',
-    'color:#fff;background:#0284c7;padding:2px 4px;border-radius:3px 0 0 3px;font-weight:700',
-    'color:#0284c7;background:#e2e8f0;padding:2px 4px;border-radius:0 3px 3px 0'
+    'color:#fff;background:#0369a1;padding:2px 5px;border-radius:3px 0 0 3px;font-weight:700',
+    'color:#0369a1;background:#e0f2fe;padding:2px 5px;border-radius:0 3px 3px 0'
   );
 }
 
 window.customCards = window.customCards || [];
-if (!window.customCards.find(c => c.type === 'pool-control-center-card')) {
+if (!window.customCards.find(function(c) { return c.type === 'pool-control-center-card'; })) {
   window.customCards.push({
     type: 'pool-control-center-card',
     name: 'Pool Control Center',
-    description: 'Pool Pump Manager – Professional Dashboard v' + CARD_VERSION,
+    description: 'Pool Pump Manager – Professional Dark-Glass Dashboard v' + CARD_VERSION,
     preview: false,
     documentationURL: 'https://github.com/choell401780/homeassistant-pool-pump-manager',
   });

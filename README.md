@@ -336,6 +336,18 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.4.1
+
+- **Bugfix**: Alle Service-Calls (Start, Stop, Automatik, Reset, Saison) mit Fehlerbehandlung und console.warn bei Fehlschlag
+- **Entity-Auto-Discovery**: Fallback-Auflösung für alternative Entity-IDs (z. B. `pool_temperature` / `temperature`)
+- **Verbesserte Pool-SVG**: Atmosphärische Nacht-Szene, helleres Poolwasser mit Unterwasserbeleuchtung, Deck-Lampen, Palme, Liegestühle
+- **Verbesserter Technikbereich**: Poolpumpe mit Rotationsanimation, Sandfilter mit Manometer, Dosieranlage mit Füllstand-Anzeige, Rohr-Verbindungen mit Richtungspfeilen
+- **Saisonmodus**: Direktwahl per 5 Buttons (Auto, Frühling, Sommer, Herbst, Winter) – kein Zyklusklick mehr nötig
+- **Click-Feedback**: Buttons animieren beim Klick visuell
+- **console.debug-Logging**: Card-Load, Entity-Discovery, Button-Klicks, Service-Calls
+- **Robuste Darstellung**: Card zeigt `–` für nicht konfigurierte Werte, nie leere Felder oder JS-Fehler
+- **Verbessertes CSS**: Mehr Tiefe, bessere Abstände, Hover-Effekte, Fortschrittsbalken-Transition
+
 ### v0.4.0
 
 - **Komplett überarbeitetes Pool Control Center Dashboard** (Redesign)
