@@ -1,10 +1,10 @@
 /**
  * Pool Control Center – Custom Lovelace Card
- * Pool Pump Manager v0.3.0
+ * Pool Pump Manager v0.3.1
  * Glassmorphism Dark Design | Dynamic HA Entity Binding
  */
 
-const CARD_VERSION = '0.3.0';
+const CARD_VERSION = '0.3.1';
 
 // ── Entity ID definitions ────────────────────────────────────────────────────
 const E = {

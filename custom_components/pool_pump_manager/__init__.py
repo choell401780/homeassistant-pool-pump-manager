@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
@@ -22,30 +23,17 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
 ]
 
-_FRONTEND_REGISTERED = False
+# URL served by HA's built-in /local/ handler (maps to /config/www/)
+_COMMUNITY_CARD_URL = "/local/community/pool_pump_manager/pool-control-center.js"
+# Fallback: custom static path registered by this integration
+_STATIC_CARD_URL = "/pool_pump_manager_static/pool-control-center.js"
+
+# Module-level flag so we only register static path once per process lifetime
+_STATIC_PATH_REGISTERED = False
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register frontend resource once per HA start."""
-    global _FRONTEND_REGISTERED
-    if not _FRONTEND_REGISTERED:
-        www_path = Path(__file__).parent / "www"
-        if www_path.is_dir():
-            try:
-                from homeassistant.components.http import StaticPathConfig
-
-                await hass.http.async_register_static_paths(
-                    [StaticPathConfig("/pool_pump_manager_frontend", str(www_path), False)]
-                )
-                from homeassistant.components.frontend import add_extra_js_url
-
-                add_extra_js_url(
-                    hass, "/pool_pump_manager_frontend/pool-control-center.js"
-                )
-                _LOGGER.info("Pool Pump Manager: registered frontend card")
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.warning("Could not register Pool Control Center card: %s", err)
-        _FRONTEND_REGISTERED = True
+    """Integration-level setup (called before config entries)."""
     return True
 
 
@@ -61,6 +49,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _register_services(hass)
+
+    # Deploy and register the Lovelace card once per HA session.
+    # Uses hass.data so the flag survives integration reloads but resets on HA restart,
+    # ensuring the latest JS is always deployed after a HACS update + restart.
+    if not hass.data[DOMAIN].get("_frontend_registered"):
+        await _async_register_frontend(hass)
+        hass.data[DOMAIN]["_frontend_registered"] = True
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
@@ -83,6 +78,85 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def _async_register_frontend(hass: HomeAssistant) -> None:
+    """Deploy Pool Control Center card and register it as an auto-loaded module.
+
+    Strategy 1 (primary): copy JS to /config/www/community/pool_pump_manager/
+    so it is served at /local/community/pool_pump_manager/pool-control-center.js
+    — the standard HACS community path that HA's built-in handler always serves.
+
+    Strategy 2 (fallback): register a custom static path and serve from there.
+    """
+    global _STATIC_PATH_REGISTERED  # noqa: PLW0603
+
+    js_src = Path(__file__).parent / "www" / "pool-control-center.js"
+    if not js_src.is_file():
+        _LOGGER.error(
+            "Pool Control Center JS not found at %s — card will not auto-load", js_src
+        )
+        return
+
+    card_url: str | None = None
+
+    # ── Strategy 1: copy to /config/www/community/ ───────────────────────────
+    dst_dir = Path(hass.config.config_dir) / "www" / "community" / "pool_pump_manager"
+    dst_file = dst_dir / "pool-control-center.js"
+
+    def _copy_sync() -> None:
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(js_src), str(dst_file))
+
+    try:
+        await hass.async_add_executor_job(_copy_sync)
+        _LOGGER.debug("Pool Control Center: deployed to %s", dst_file)
+        card_url = _COMMUNITY_CARD_URL
+    except OSError as err:
+        _LOGGER.warning(
+            "Pool Control Center: cannot copy JS to %s (%s) — using static path fallback",
+            dst_file,
+            err,
+        )
+
+    # ── Strategy 2: custom static path (fallback) ────────────────────────────
+    if card_url is None:
+        if not _STATIC_PATH_REGISTERED:
+            try:
+                from homeassistant.components.http import StaticPathConfig
+
+                await hass.http.async_register_static_paths(
+                    [
+                        StaticPathConfig(
+                            "/pool_pump_manager_static",
+                            str(js_src.parent),
+                            False,  # cache_headers=False
+                        )
+                    ]
+                )
+                _STATIC_PATH_REGISTERED = True
+                _LOGGER.debug("Pool Control Center: static path registered")
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error(
+                    "Pool Control Center: static path registration failed: %s — "
+                    "add the card manually as a Lovelace resource",
+                    err,
+                )
+                return
+        card_url = _STATIC_CARD_URL
+
+    # ── Register as auto-loaded ES module ────────────────────────────────────
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, card_url)
+        _LOGGER.info(
+            "Pool Control Center card registered at %s — "
+            "add 'type: custom:pool-control-center-card' to your dashboard",
+            card_url,
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Pool Control Center: add_extra_js_url failed: %s", err)
+
+
 def _register_services(hass: HomeAssistant) -> None:
     """Register integration services (idempotent)."""
     if hass.services.has_service(DOMAIN, "start_now"):
@@ -90,19 +164,23 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def _start_now(call: ServiceCall) -> None:
         for coord in hass.data.get(DOMAIN, {}).values():
-            await coord.async_start_now()
+            if isinstance(coord, PoolPumpCoordinator):
+                await coord.async_start_now()
 
     async def _stop_now(call: ServiceCall) -> None:
         for coord in hass.data.get(DOMAIN, {}).values():
-            await coord.async_stop_now()
+            if isinstance(coord, PoolPumpCoordinator):
+                await coord.async_stop_now()
 
     async def _reset_runtime(call: ServiceCall) -> None:
         for coord in hass.data.get(DOMAIN, {}).values():
-            await coord.async_reset_runtime()
+            if isinstance(coord, PoolPumpCoordinator):
+                await coord.async_reset_runtime()
 
     async def _force_recalculate(call: ServiceCall) -> None:
         for coord in hass.data.get(DOMAIN, {}).values():
-            await coord.async_force_recalculate()
+            if isinstance(coord, PoolPumpCoordinator):
+                await coord.async_force_recalculate()
 
     hass.services.async_register(DOMAIN, "start_now", _start_now)
     hass.services.async_register(DOMAIN, "stop_now", _stop_now)

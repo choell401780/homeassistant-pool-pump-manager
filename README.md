@@ -133,12 +133,31 @@ Die Integration registriert automatisch eine **Custom Lovelace Card** (`pool-con
 
 ### Einbindung in Lovelace
 
+Nach der Installation und einem **Neustart von Home Assistant**:
+
+1. Dashboard öffnen → **Bearbeiten** → **Karte hinzufügen**
+2. Unten auf **Manuelle Karte** klicken und folgendes eingeben:
+
 ```yaml
 type: custom:pool-control-center-card
 title: Pool Control Center
 ```
 
-Die Card wird **automatisch registriert**, sobald die Integration aktiv ist – kein manuelles Hinzufügen von Ressourcen nötig.
+**Keine manuelle Ressourcen-Registrierung erforderlich.** Die Card wird beim Start automatisch unter `Einstellungen → Dashboards → Ressourcen` sichtbar sein.
+
+> **Technischer Hinweis:** Die Integration kopiert `pool-control-center.js` beim Start automatisch nach
+> `/config/www/community/pool_pump_manager/` und registriert sie als ES-Modul im HA-Frontend.
+> Die Datei wird dabei immer mit der aktuellen Version überschrieben, sodass HACS-Updates direkt wirksam sind.
+
+### Fallback (manuell)
+
+Falls die automatische Registrierung nicht funktioniert (z. B. bei Schreibschutz auf `/config/www/`):
+
+1. **Einstellungen → Dashboards → Ressourcen** öffnen
+2. **Ressource hinzufügen** klicken
+3. URL: `/local/community/pool_pump_manager/pool-control-center.js`
+4. Typ: **JavaScript-Modul**
+5. Home Assistant neu starten
 
 ---
 
@@ -316,6 +335,15 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 ---
 
 ## Changelog
+
+### v0.3.1
+
+- **Hotfix**: Automatische Lovelace-Ressourcen-Registrierung repariert
+- Die Integration kopiert `pool-control-center.js` jetzt beim Start nach `/config/www/community/pool_pump_manager/` (Standard-HACS-Pfad, serviert über `/local/`)
+- Registrierung erfolgt nun in `async_setup_entry` (zuverlässigerer Zeitpunkt als `async_setup`)
+- Fallback auf benutzerdefinierten statischen Pfad wenn `/config/www/` nicht beschreibbar
+- Verbesserte Fehlerprotokollierung für Frontend-Registrierung
+- Kein manuelles Hinzufügen von Lovelace-Ressourcen mehr erforderlich
 
 ### v0.3.0
 
