@@ -336,6 +336,14 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.5.2
+
+- **Fix: Laufzeitwerte leer** — `_resolveEntities()` läuft jetzt nach jeder HA-Aktualisierung erneut, solange kritische Entities fehlen oder `unavailable` sind (statt nur einmal beim Start)
+- **Fix: Entity-Mapping robuster** — SUFFIX_MAP enthält jetzt deutsche Alternativ-Suffixe (`laufzeit_heute`, `restlaufzeit`, `tagesziel`, `gesamtlaufzeit`, `saisonlaufzeit`, `seit_wartung`, etc.)
+- **Fix: Friendly-Name-Fallback** — wenn Suffix-Mapping scheitert, wird `attributes.friendly_name` aller `pool_pump_manager`-Entities durchsucht
+- **Fix: Info-Seite zeigt echte Diagnose** — für jede Entity: Anzeigename · tatsächliche Entity-ID · aktueller State + Einheit · ✓/?/✗ Status; remappte IDs orange hervorgehoben
+- **Fix: unavailable ≠ gefunden** — Entity mit State `unavailable`/`unknown` zeigt `?` statt `✓`
+
 ### v0.5.1
 
 - **Eigenes Poolbild**: Automatische Erkennung von `/config/www/pool-pump-manager/pool-background.jpg` — falls vorhanden, wird es über die CSS-Schichten gelegt. Alternativ `pool_image: /local/...` in der Card-Konfiguration

@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.5.1
- * Custom pool image, functional navigation, improved entity discovery.
+ * Pool Control Center – Custom Lovelace Card v0.5.2
+ * Fix runtime entity binding: re-resolve on missing, German suffix map, friendly-name fallback.
  */
 
-const CARD_VERSION = '0.5.1';
+const CARD_VERSION = '0.5.2';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -238,8 +238,13 @@ const CARD_CSS = '' +
 '.info-entities{display:flex;flex-direction:column;gap:3px;max-height:260px;overflow-y:auto;}' +
 '.info-row{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;background:#161b22;border:1px solid #21262d;}' +
 '.info-ok{color:#22c55e;font-size:13px;width:14px;flex-shrink:0;}' +
+'.info-warn{color:#f59e0b;font-size:13px;width:14px;flex-shrink:0;}' +
 '.info-miss{color:#ef4444;font-size:13px;width:14px;flex-shrink:0;}' +
-'.info-val{color:#e6edf3;font-weight:600;min-width:50px;text-align:right;font-size:11px;}' +
+'.info-key{font-size:11px;color:#7d8590;min-width:90px;max-width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+'.info-eid{font-size:10px;color:#22d3ee;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}' +
+'.info-eid.remapped{color:#f59e0b;}' +
+'.info-val{color:#e6edf3;font-weight:600;min-width:60px;text-align:right;font-size:11px;white-space:nowrap;}' +
+'.info-val.unavail{color:#7d8590;}' +
 
 /* USER POOL IMAGE layer */
 '.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}';
@@ -597,32 +602,79 @@ function buildPageHistory() {
 }
 
 function buildPageInfo(E, hass) {
+  var DISPLAY_NAMES = {
+    automation:    'Automatik',
+    running:       'Pumpe läuft',
+    warning:       'Warnung',
+    status:        'Status',
+    power:         'Leistung',
+    energy:        'Energie',
+    voltage:       'Spannung',
+    current:       'Strom',
+    frequency:     'Frequenz',
+    runtimeToday:  'Laufzeit heute',
+    remaining:     'Restlaufzeit',
+    target:        'Tagesziel',
+    efficiency:    'Effizienz',
+    nextStart:     'Nächster Start',
+    totalRuntime:  'Gesamtlaufzeit',
+    seasonRuntime: 'Saisonlaufzeit',
+    maintenance:   'Seit Wartung',
+    seasonMode:    'Saisonmodus',
+    ph:            'pH-Wert',
+    redox:         'Redox',
+    temperature:   'Temperatur',
+    btnMaint:      'Reset Wartung',
+    btnSeason:     'Reset Saison',
+  };
+
   var rows = '';
+  var cntOk = 0, cntUnavail = 0, cntMiss = 0;
+
   if (E && hass && hass.states) {
     var keys = Object.keys(E);
     for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      var id  = E[key];
-      var state = hass.states[id];
-      var val = state ? state.state : 'nicht gefunden';
-      var cls = state ? 'info-ok' : 'info-miss';
-      var sym = state ? '✓' : '✗';
+      var key     = keys[i];
+      var actId   = E[key];
+      var defId   = ENTITY_DEFAULTS[key] || actId;
+      var remapped = (actId !== defId);
+      var stateObj = hass.states[actId];
+      var rawState = stateObj ? stateObj.state : null;
+      var unit     = stateObj && stateObj.attributes && stateObj.attributes.unit_of_measurement
+                       ? stateObj.attributes.unit_of_measurement : '';
+      var isUnavail = rawState === 'unavailable' || rawState === 'unknown';
+      var sym, cls, valCls;
+      if (!stateObj) {
+        sym = '✗'; cls = 'info-miss'; cntMiss++;
+      } else if (isUnavail) {
+        sym = '?'; cls = 'info-warn'; cntUnavail++;
+      } else {
+        sym = '✓'; cls = 'info-ok'; cntOk++;
+      }
+      var displayVal = rawState !== null ? (rawState + (unit ? ' ' + unit : '')) : 'nicht gefunden';
+      valCls = isUnavail ? 'info-val unavail' : 'info-val';
       rows += '<div class="info-row">' +
         '<span class="' + cls + '">' + sym + '</span>' +
-        '<span style="flex:1;font-size:10px;color:#7d8590;word-break:break-all;">' + id + '</span>' +
-        '<span class="info-val">' + val + '</span>' +
+        '<span class="info-key" title="' + key + '">' + (DISPLAY_NAMES[key] || key) + '</span>' +
+        '<span class="info-eid' + (remapped ? ' remapped' : '') + '" title="' + actId + '">' + actId + '</span>' +
+        '<span class="' + valCls + '">' + displayVal + '</span>' +
       '</div>';
     }
   }
+
   return '<div class="page-body">' +
-    '<div class="page-hdr">Info</div>' +
+    '<div class="page-hdr">Info &amp; Diagnose</div>' +
     '<div class="info-block">' +
       '<div class="info-kv"><span class="info-kv-k">Integration</span><span class="info-kv-v">Pool Pump Manager</span></div>' +
       '<div class="info-kv"><span class="info-kv-k">Card Version</span><span class="info-kv-v">v' + CARD_VERSION + '</span></div>' +
+      '<div class="info-kv"><span class="info-kv-k">Entities Status</span><span class="info-kv-v">' +
+        '<span style="color:#22c55e;">✓ ' + cntOk + '</span>' +
+        (cntUnavail ? '&nbsp; <span style="color:#f59e0b;">? ' + cntUnavail + '</span>' : '') +
+        (cntMiss    ? '&nbsp; <span style="color:#ef4444;">✗ ' + cntMiss    + '</span>' : '') +
+      '</span></div>' +
       '<div class="info-kv"><span class="info-kv-k">Repository</span><span class="info-kv-v"><a class="info-link" href="https://github.com/choell401780/homeassistant-pool-pump-manager" target="_blank">GitHub ↗</a></span></div>' +
-      '<div class="info-kv"><span class="info-kv-k">Installation</span><span class="info-kv-v">HACS Custom Repository</span></div>' +
     '</div>' +
-    '<div class="page-sub-hdr">Entities (' + Object.keys(E || {}).length + ')</div>' +
+    '<div class="page-sub-hdr">Entities — ✓ gefunden · ? unavailable · ✗ nicht gefunden · <span style="color:#f59e0b;">gelb = ID remapped</span></div>' +
     '<div class="info-entities">' + rows + '</div>' +
   '</div>';
 }
@@ -642,8 +694,22 @@ class PoolControlCenterCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._E) this._resolveEntities();
+    if (!this._E || this._needsResolve()) this._resolveEntities();
     this._render();
+  }
+
+  _needsResolve() {
+    if (!this._E || !this._hass || !this._hass.states) return true;
+    var st = this._hass.states;
+    // Re-resolve if any of the key runtime entities is still missing or unavailable
+    var critical = ['runtimeToday', 'remaining', 'target', 'totalRuntime', 'seasonRuntime', 'maintenance'];
+    for (var i = 0; i < critical.length; i++) {
+      var id = this._E[critical[i]];
+      if (!id) return true;
+      var s = st[id];
+      if (!s || s.state === 'unavailable' || s.state === 'unknown') return true;
+    }
+    return false;
   }
 
   setConfig(config) {
@@ -684,24 +750,24 @@ class PoolControlCenterCard extends HTMLElement {
     }
     LOG.debug('Auto-scan found suffixes:', Object.keys(autoMap).join(', '));
 
-    // For each key still not found, try auto-map by known suffixes
+    // For each key still not found, try auto-map by known suffixes (incl. German alternatives)
     var SUFFIX_MAP = {
-      runtimeToday:  ['runtime_today'],
-      remaining:     ['remaining_runtime', 'remaining'],
-      target:        ['target_runtime', 'target'],
-      totalRuntime:  ['total_runtime'],
-      seasonRuntime: ['season_runtime'],
-      maintenance:   ['runtime_since_maintenance', 'since_maintenance'],
-      efficiency:    ['efficiency'],
-      nextStart:     ['next_start'],
-      power:         ['power'],
-      voltage:       ['voltage'],
-      current:       ['current'],
-      frequency:     ['frequency'],
-      energy:        ['energy'],
-      ph:            ['ph', 'ph_value'],
-      redox:         ['redox'],
-      temperature:   ['pool_temperature', 'temperature', 'water_temperature'],
+      runtimeToday:  ['runtime_today', 'laufzeit_heute', 'tageslaufzeit', 'laufzeit', 'runtime'],
+      remaining:     ['remaining_runtime', 'remaining', 'restlaufzeit', 'verbleibende_laufzeit', 'verbleibend'],
+      target:        ['target_runtime', 'target', 'tagesziel', 'ziel_laufzeit', 'ziel', 'sollwert'],
+      totalRuntime:  ['total_runtime', 'gesamtlaufzeit', 'betriebsstunden', 'gesamt', 'total'],
+      seasonRuntime: ['season_runtime', 'saisonlaufzeit', 'season'],
+      maintenance:   ['runtime_since_maintenance', 'since_maintenance', 'seit_wartung', 'wartungslaufzeit', 'maintenance'],
+      efficiency:    ['efficiency', 'effizienz', 'wirkungsgrad'],
+      nextStart:     ['next_start', 'naechster_start', 'next'],
+      power:         ['power', 'leistung', 'watt'],
+      voltage:       ['voltage', 'spannung'],
+      current:       ['current', 'strom', 'ampere'],
+      frequency:     ['frequency', 'frequenz', 'hz'],
+      energy:        ['energy', 'energie', 'verbrauch', 'kwh', 'kWh'],
+      ph:            ['ph', 'ph_value', 'ph_wert'],
+      redox:         ['redox', 'orp'],
+      temperature:   ['pool_temperature', 'temperature', 'water_temperature', 'temperatur', 'wassertemperatur', 'pool_temp'],
     };
     var smKeys = Object.keys(SUFFIX_MAP);
     for (var mi = 0; mi < smKeys.length; mi++) {
@@ -710,7 +776,7 @@ class PoolControlCenterCard extends HTMLElement {
         var suffixes = SUFFIX_MAP[mkey];
         for (var sfi = 0; sfi < suffixes.length; sfi++) {
           if (autoMap[suffixes[sfi]]) {
-            LOG.debug('Auto-mapped:', mkey, '->', autoMap[suffixes[sfi]]);
+            LOG.debug('Suffix-mapped:', mkey, '->', autoMap[suffixes[sfi]]);
             resolved[mkey] = autoMap[suffixes[sfi]];
             break;
           }
@@ -718,19 +784,58 @@ class PoolControlCenterCard extends HTMLElement {
       }
     }
 
+    // Last resort: match by friendly_name attribute
+    var FNAME_MAP = {
+      runtimeToday:  ['laufzeit heute', 'runtime today', 'tageslaufzeit'],
+      remaining:     ['restlaufzeit', 'remaining runtime'],
+      target:        ['tagesziel', 'target runtime', 'ziel-laufzeit'],
+      totalRuntime:  ['gesamtlaufzeit', 'total runtime', 'betriebsstunden'],
+      seasonRuntime: ['saisonlaufzeit', 'season runtime'],
+      maintenance:   ['seit wartung', 'runtime since maintenance', 'since maintenance'],
+      nextStart:     ['nächster start', 'next start', 'naechster start'],
+    };
+    var allStateIds = Object.keys(st);
+    var fnKeys = Object.keys(FNAME_MAP);
+    for (var fni = 0; fni < fnKeys.length; fni++) {
+      var fnkey = fnKeys[fni];
+      if (st[resolved[fnkey]]) continue;
+      var nameList = FNAME_MAP[fnkey];
+      for (var idi = 0; idi < allStateIds.length; idi++) {
+        var cid = allStateIds[idi];
+        if (cid.indexOf('pool_pump_manager') === -1) continue;
+        var attrs = st[cid].attributes;
+        var fn = attrs && (attrs.friendly_name || '');
+        if (!fn) continue;
+        var fnl = fn.toLowerCase();
+        var matched = false;
+        for (var nmi = 0; nmi < nameList.length; nmi++) {
+          if (fnl.indexOf(nameList[nmi].toLowerCase()) !== -1) {
+            LOG.debug('Friendly-name matched:', fnkey, '->', cid, '(' + fn + ')');
+            resolved[fnkey] = cid;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+    }
+
     // Log summary
-    var found = [], missing = [];
+    var found = [], unavail = [], missing = [];
     var rKeys = Object.keys(resolved);
     for (var li = 0; li < rKeys.length; li++) {
       var lkey = rKeys[li];
-      if (st[resolved[lkey]]) { found.push(lkey); }
-      else { missing.push(lkey); }
+      var ls = st[resolved[lkey]];
+      if (!ls) { missing.push(lkey); }
+      else if (ls.state === 'unavailable' || ls.state === 'unknown') { unavail.push(lkey); }
+      else { found.push(lkey); }
     }
     LOG.debug('Found (' + found.length + '):', found.join(', '));
+    if (unavail.length) { LOG.debug('Unavailable (' + unavail.length + '):', unavail.join(', ')); }
     if (missing.length) { LOG.debug('Missing (' + missing.length + '):', missing.join(', ')); }
 
     this._E = resolved;
-    LOG.info('Entities resolved. v' + CARD_VERSION + ' — ' + found.length + '/' + rKeys.length + ' found');
+    LOG.info('Entities resolved. v' + CARD_VERSION + ' — ' + found.length + ' ok, ' + unavail.length + ' unavail, ' + missing.length + ' missing');
   }
 
   _val(id, def) {
