@@ -336,6 +336,17 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.4.2
+
+- **Pool Control Center Mockup-Redesign**: `pool-control-center.js` komplett neu geschrieben, pixelgenau am Dashboard-Mockup ausgerichtet
+- **Neuer Pool-Hero-Bereich**: Atmosphärische Nacht-Szene mit SVG-Schichten (Sternenhimmel, Hecken-Silhouetten, Palme mit Wedeln, Holzdeck-Planken, 8 Amber-Boden-Uplights, brillantes Teal-Poolwasser mit 3 Unterwasser-Lichtspots, Kaustikhighlights, Liegestühle, Sonnenschirm, Poolleiter) — Ripple-Animation wenn Pumpe läuft
+- **Technik-Panel überarbeitet**: Drei separate SVG-Builder (Pump, Filter, Doser) — Pumpe mit blauem LED-Ring-Spinner, Sandfilter mit Manometer-Nadel, Dosieranlage mit pH-blau/Redox-rot Flaschen
+- **Status-Bar**: 7 Metriken in einheitlichem Grid (Status, Leistung, Spannung, Strom, Frequenz, Effizienz, Energie) mit farbigen Icons und Einheitenformatierung
+- **Header**: 3 Badges (Automatik-Dot pulsierend, Saison-Icon, Version) — Klick auf Automatik-Badge und Saison-Badge direkt funktional
+- **Bottom-Panels**: LAUFZEITEN (Fortschrittsbalken), SAISON (Saisonname groß, Saisonmodus-Link), WASSERQUALITÄT, WARTUNG & BETRIEBSSTUNDEN, STEUERUNG (Automatikmodus-Toggle, Start/Stop, Reset-Buttons, Saisonmodus-Dropdown)
+- **Navigationsleiste**: 6 Buttons (Übersicht aktiv, Laufzeiten, Einstellungen, Wartung, Historie, Info)
+- **Version**: Alle Tags (`manifest.json`, `switch.py`, Card-Banner) auf 0.4.2
+
 ### v0.4.1
 
 - **Bugfix**: Alle Service-Calls (Start, Stop, Automatik, Reset, Saison) mit Fehlerbehandlung und console.warn bei Fehlschlag
