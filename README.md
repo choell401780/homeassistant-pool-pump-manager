@@ -336,6 +336,14 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.5.0
+
+- **Pool-Hero komplett überarbeitet**: SVG-Landschaft (Cartoon-Palme, gezeichnete Hecken) durch atmosphärisches CSS-Layer-System ersetzt
+- **CSS-Schichten (10 Ebenen)**: Himmelsgradient, unscharfe Foliagen-Blobs (kein Cartoon), Holzdeck via `repeating-linear-gradient`, 9 Amber-Boden-Uplights, Pool-Glow-Halo, Pool-Rim, Pool-Wasser mit Unterwasser-Lichtspots, Palmen-Silhouette als data-URI (nur filled shapes, kein stroke), Möbel-Silhouetten, Tiefenvignette
+- **Ripple-Animation**: CSS `@keyframes pool-ripple` wenn Pumpe läuft — kein SVG `<animate>`
+- **Technik-SVGs verbessert**: Pumpe mit `radialGradient`/`linearGradient` Volumenkörper (kein sichtbarer Stroke), größerer LED-Ring mit Outer-Glow-Halo, Sandfilter mit Manometer-Skalenstrichen, Dosieranlage mit Reflexions-Highlights
+- **Keine SVG-Landschaft mehr** — Pool-Bereich ist reines HTML/CSS
+
 ### v0.4.2
 
 - **Pool Control Center Mockup-Redesign**: `pool-control-center.js` komplett neu geschrieben, pixelgenau am Dashboard-Mockup ausgerichtet

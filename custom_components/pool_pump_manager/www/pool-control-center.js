@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.4.2
- * Pixel-faithful reproduction of the Pool Pump Manager dashboard mockup.
+ * Pool Control Center – Custom Lovelace Card v0.5.0
+ * CSS-layered pool hero (no SVG landscape). Improved tech SVGs.
  */
 
-const CARD_VERSION = '0.4.2';
+const CARD_VERSION = '0.5.0';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -85,8 +85,7 @@ const CARD_CSS = '' +
 
 /* MAIN AREA */
 '.main-area{display:flex;height:340px;border-bottom:1px solid #21262d;overflow:hidden;}' +
-'.pool-area{flex:0 0 60%;overflow:hidden;position:relative;background:#060c14;}' +
-'.pool-area svg{width:100%;height:100%;display:block;pointer-events:none;}' +
+'.pool-area{flex:0 0 60%;overflow:hidden;position:relative;background:#040810;}' +
 '.tech-panel{flex:0 0 40%;background:#0f1419;border-left:1px solid #21262d;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;}' +
 '.tech-hdr{font-size:11px;font-weight:700;letter-spacing:0.15em;color:#7d8590;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid #21262d;flex-shrink:0;}' +
 '.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1;min-height:0;}' +
@@ -103,9 +102,27 @@ const CARD_CSS = '' +
 '.tech-col-metrics b{color:#e6edf3;font-weight:600;}' +
 '.tech-sysstat{display:flex;align-items:center;gap:6px;font-size:12px;color:#22c55e;padding-top:6px;border-top:1px solid #21262d;flex-shrink:0;}' +
 
-/* PUMP SVG ANIMATION */
+/* PUMP ANIMATION */
 '@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg)}}' +
-'.pump-ring-run{transform-origin:52px 50px;transform-box:fill-box;animation:spin 2s linear infinite;}' +
+'.pump-ring-run{transform-origin:88px 50px;transform-box:fill-box;animation:spin 2s linear infinite;}' +
+
+/* POOL HERO – CSS layered divs */
+'.pool-hero{position:relative;width:100%;height:100%;overflow:hidden;background:#040810;}' +
+'.pool-hero>*{position:absolute;}' +
+'.ph-sky{inset:0;}' +
+'.ph-foliage{top:0;left:0;right:0;height:62%;}' +
+'.ph-deck{left:0;right:0;bottom:0;height:58%;}' +
+'.ph-lamps{inset:0;pointer-events:none;}' +
+'.ph-pool-glow{border-radius:50%;pointer-events:none;}' +
+'.ph-pool-rim{border-radius:50%;pointer-events:none;}' +
+'.ph-pool-water{border-radius:50%;overflow:hidden;}' +
+'.ph-uwl{position:absolute;border-radius:50%;pointer-events:none;}' +
+'.ph-palm{pointer-events:none;}' +
+'.ph-furniture{pointer-events:none;}' +
+'.ph-vignette{pointer-events:none;}' +
+'@keyframes pool-ripple{0%{transform:translate(-50%,-50%) scale(0.3);opacity:0.7;}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0;}}' +
+'.ph-ripple{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40%;height:55%;border-radius:50%;border:1.5px solid rgba(0,229,255,0.45);animation:pool-ripple 3s ease-out infinite;pointer-events:none;}' +
+'.ph-ripple-2{animation-delay:1.5s;}' +
 
 /* STATUS BAR */
 '.stat-bar{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid #21262d;}' +
@@ -185,305 +202,256 @@ const CARD_CSS = '' +
 '.nav-ico{font-size:17px;}' +
 '.nav-lbl{font-size:10px;font-weight:500;}';
 
-// ── Pool SVG ─────────────────────────────────────────────────────────────────
+// ── Pool Hero (CSS layered divs – no SVG landscape) ───────────────────────────
 
-function buildPoolSvg(running) {
-  var plankLines = '';
-  for (var py = 180; py <= 340; py += 12) {
-    plankLines += '<line x1="0" y1="' + py + '" x2="800" y2="' + py + '" stroke="#2c1a0a" stroke-width="1" opacity="0.45"/>';
-  }
+function buildPoolHero(running) {
+  var ripples = running ?
+    '<div class="ph-ripple"></div><div class="ph-ripple ph-ripple-2"></div>' : '';
 
-  var fronds = [
-    'M90,115 Q60,145 30,168',
-    'M90,115 Q55,125 25,128',
-    'M90,115 Q62,108 40,90',
-    'M90,115 Q70,95 65,68',
-    'M90,115 Q88,88 95,62',
-    'M90,115 Q108,92 125,72',
-    'M90,115 Q118,108 148,105',
-    'M90,115 Q120,125 152,138',
-  ];
-  var frondPaths = '';
-  for (var fi = 0; fi < fronds.length; fi++) {
-    frondPaths += '<path d="' + fronds[fi] + '" stroke="#143d14" stroke-width="6" fill="none" stroke-linecap="round" opacity="' + (0.7 + fi * 0.03) + '"/>';
-    frondPaths += '<path d="' + fronds[fi] + '" stroke="#1e5c1e" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>';
-  }
+  return '' +
+    '<div class="pool-hero">' +
 
-  var lamps = [
-    [165,310],[270,325],[380,332],[490,325],[600,310],[690,305],[155,245],[680,248]
-  ];
-  var lampEls = '';
-  for (var li = 0; li < lamps.length; li++) {
-    var lx = lamps[li][0], ly = lamps[li][1];
-    lampEls += '<ellipse cx="' + lx + '" cy="' + ly + '" rx="38" ry="16" fill="url(#lamp-glow)"/>';
-    lampEls += '<circle cx="' + lx + '" cy="' + ly + '" r="4" fill="#ffb347" opacity="0.9"/>';
-  }
+      /* Layer 1: sky + distant foliage colour suggestion */
+      '<div class="ph-sky" style="' +
+        'background:' +
+          'radial-gradient(ellipse 130% 55% at 50% -5%, #0b230a 0%, transparent 55%),' +
+          'radial-gradient(ellipse 55% 60% at 3% 25%, #061406 0%, transparent 45%),' +
+          'radial-gradient(ellipse 45% 50% at 97% 25%, #061406 0%, transparent 45%),' +
+          'linear-gradient(to bottom, #040810 0%, #0a1520 100%);' +
+        'filter:blur(3px);' +
+      '"></div>' +
 
-  var caustics = [
-    [310,252,18,7],[350,242,14,5],[410,236,20,7],[460,244,12,5],[500,252,16,6],[540,245,14,5],[480,260,10,4]
-  ];
-  var causticEls = '';
-  for (var ci = 0; ci < caustics.length; ci++) {
-    var c = caustics[ci];
-    causticEls += '<ellipse cx="' + c[0] + '" cy="' + c[1] + '" rx="' + c[2] + '" ry="' + c[3] + '" fill="white" opacity="0.1"/>';
-  }
+      /* Layer 2: dense foliage mass (blurred radial blobs, no drawn shapes) */
+      '<div class="ph-foliage" style="' +
+        'background:' +
+          'radial-gradient(ellipse 40% 80% at 8% 85%, rgba(4,16,4,0.95) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 30% 70% at 22% 90%, rgba(7,22,7,0.9) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 35% 75% at 38% 88%, rgba(5,18,5,0.92) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 40% 80% at 55% 90%, rgba(6,20,6,0.9) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 30% 70% at 72% 85%, rgba(7,22,7,0.88) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 35% 75% at 88% 88%, rgba(5,18,5,0.9) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 25% 60% at 95% 80%, rgba(4,14,4,0.92) 0%, transparent 100%);' +
+        'filter:blur(5px);' +
+      '"></div>' +
 
-  var rippleEls = '';
-  if (running) {
-    rippleEls =
-      '<ellipse cx="430" cy="255" rx="60" ry="22" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0">' +
-        '<animate attributeName="rx" values="60;145;60" dur="3s" repeatCount="indefinite"/>' +
-        '<animate attributeName="ry" values="22;52;22" dur="3s" repeatCount="indefinite"/>' +
-        '<animate attributeName="opacity" values="0;0.4;0" dur="3s" repeatCount="indefinite"/>' +
-      '</ellipse>' +
-      '<ellipse cx="430" cy="255" rx="60" ry="22" fill="none" stroke="#00e5ff" stroke-width="1" opacity="0">' +
-        '<animate attributeName="rx" values="60;145;60" dur="3s" begin="1.5s" repeatCount="indefinite"/>' +
-        '<animate attributeName="ry" values="22;52;22" dur="3s" begin="1.5s" repeatCount="indefinite"/>' +
-        '<animate attributeName="opacity" values="0;0.25;0" dur="3s" begin="1.5s" repeatCount="indefinite"/>' +
-      '</ellipse>';
-  }
+      /* Layer 3: wooden deck with planks via repeating gradient */
+      '<div class="ph-deck" style="' +
+        'background:' +
+          'repeating-linear-gradient(0deg,transparent 0px,transparent 11px,rgba(0,0,0,0.28) 11px,rgba(0,0,0,0.28) 12px),' +
+          'repeating-linear-gradient(90deg,transparent 0px,transparent 120px,rgba(0,0,0,0.05) 120px,rgba(0,0,0,0.05) 121px),' +
+          'linear-gradient(to bottom, #4e3014 0%, #3d2510 35%, #2e1b0a 75%, #201208 100%);' +
+      '"></div>' +
 
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" preserveAspectRatio="xMidYMid slice">' +
-    '<defs>' +
-      '<linearGradient id="sky-grad" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="#060c14"/>' +
-        '<stop offset="100%" stop-color="#0d1a28"/>' +
-      '</linearGradient>' +
-      '<radialGradient id="lamp-glow" cx="50%" cy="50%" r="50%">' +
-        '<stop offset="0%" stop-color="#ff8000" stop-opacity="0.7"/>' +
-        '<stop offset="60%" stop-color="#ff5500" stop-opacity="0.25"/>' +
-        '<stop offset="100%" stop-color="#ff2200" stop-opacity="0"/>' +
-      '</radialGradient>' +
-      '<radialGradient id="pool-water" cx="40%" cy="35%" r="60%">' +
-        '<stop offset="0%" stop-color="#00e5ff" stop-opacity="0.95"/>' +
-        '<stop offset="25%" stop-color="#00b4d8" stop-opacity="0.9"/>' +
-        '<stop offset="60%" stop-color="#0077b6" stop-opacity="0.85"/>' +
-        '<stop offset="100%" stop-color="#023e8a" stop-opacity="0.95"/>' +
-      '</radialGradient>' +
-      '<radialGradient id="uwl" cx="50%" cy="50%" r="50%">' +
-        '<stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>' +
-        '<stop offset="35%" stop-color="#7df9ff" stop-opacity="0.5"/>' +
-        '<stop offset="100%" stop-color="#00bcd4" stop-opacity="0"/>' +
-      '</radialGradient>' +
-      '<radialGradient id="pool-rim" cx="50%" cy="30%" r="70%">' +
-        '<stop offset="0%" stop-color="#d0d7e0"/>' +
-        '<stop offset="100%" stop-color="#7a8694"/>' +
-      '</radialGradient>' +
-      '<filter id="glow-f">' +
-        '<feGaussianBlur stdDeviation="3" result="blur"/>' +
-        '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
-      '</filter>' +
-    '</defs>' +
+      /* Layer 4: amber ground uplights */
+      '<div class="ph-lamps" style="' +
+        'background:' +
+          'radial-gradient(ellipse 7% 5% at 13% 82%, rgba(255,140,30,0.55) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 7% 5% at 25% 90%, rgba(255,130,20,0.5) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 8% 5% at 38% 94%, rgba(255,135,25,0.45) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 7% 5% at 51% 93%, rgba(255,130,20,0.45) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 7% 5% at 64% 90%, rgba(255,140,30,0.5) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 7% 5% at 77% 83%, rgba(255,135,25,0.5) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 6% 4% at 88% 78%, rgba(255,140,30,0.45) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 5% 4% at 12% 70%, rgba(255,120,15,0.35) 0%, transparent 100%),' +
+          'radial-gradient(ellipse 5% 4% at 89% 68%, rgba(255,120,15,0.35) 0%, transparent 100%);' +
+      '"></div>' +
 
-    /* Sky */
-    '<rect width="800" height="340" fill="url(#sky-grad)"/>' +
+      /* Layer 5: pool outer cyan glow on deck */
+      '<div class="ph-pool-glow" style="' +
+        'left:14%;right:11%;top:38%;bottom:10%;' +
+        'box-shadow:0 0 60px 30px rgba(0,200,255,0.15),0 0 120px 60px rgba(0,150,200,0.08);' +
+      '"></div>' +
 
-    /* Stars */
-    '<g fill="white" opacity="0.5">' +
-      '<circle cx="45" cy="18" r="0.8"/><circle cx="95" cy="8" r="1.0"/><circle cx="170" cy="25" r="0.7"/>' +
-      '<circle cx="240" cy="12" r="0.9"/><circle cx="320" cy="30" r="0.7"/><circle cx="395" cy="8" r="1.1"/>' +
-      '<circle cx="450" cy="22" r="0.8"/><circle cx="510" cy="15" r="0.9"/><circle cx="590" cy="28" r="0.7"/>' +
-      '<circle cx="650" cy="10" r="1.0"/><circle cx="710" cy="20" r="0.8"/><circle cx="760" cy="35" r="0.7"/>' +
-      '<circle cx="800" cy="12" r="0.9"/><circle cx="80" cy="45" r="0.7"/><circle cx="200" cy="40" r="0.8"/>' +
-      '<circle cx="350" cy="50" r="0.7"/><circle cx="500" cy="38" r="0.9"/><circle cx="620" cy="42" r="0.7"/>' +
-      '<circle cx="700" cy="30" r="1.0"/><circle cx="750" cy="48" r="0.8"/>' +
-    '</g>' +
+      /* Layer 6: pool rim/coping */
+      '<div class="ph-pool-rim" style="' +
+        'left:14%;right:11%;top:38%;bottom:10%;' +
+        'border:3px solid rgba(160,185,210,0.45);' +
+        'box-shadow:inset 0 0 20px rgba(0,50,100,0.5);' +
+      '"></div>' +
 
-    /* Rear hedge layer 1 */
-    '<path d="M0,200 C50,140 100,110 150,130 C200,100 250,90 300,120 C350,85 400,80 450,105 C500,88 550,95 600,115 C650,90 700,100 750,120 C775,130 790,150 800,160 L800,0 L0,0 Z" fill="#0a2009"/>' +
-    /* Hedge layer 2 (lighter, offset) */
-    '<path d="M0,190 C40,155 90,120 140,140 C190,110 240,95 290,115 C340,90 395,88 440,108 C490,92 545,98 600,118 C645,98 695,108 740,125 C765,135 785,155 800,165 L800,0 L0,0 Z" fill="#0d2e0a" opacity="0.7"/>' +
-    /* Mid-ground dark green mass */
-    '<path d="M0,215 C80,185 160,175 200,185 C250,170 300,168 320,185 L320,215 Z" fill="#061806" opacity="0.8"/>' +
-    '<path d="M680,215 C720,185 760,178 800,185 L800,215 Z" fill="#061806" opacity="0.8"/>' +
+      /* Layer 7: pool water with underwater light spots and ripples inside */
+      '<div class="ph-pool-water" style="' +
+        'left:14.5%;right:11.5%;top:38.5%;bottom:10.5%;' +
+        'background:radial-gradient(ellipse at 42% 32%, #00e8ff 0%, #00c8e8 12%, #00a0c8 30%, #0077b6 58%, #024e9a 80%, #02307a 100%);' +
+      '">' +
+        /* Underwater light spots */
+        '<div class="ph-uwl" style="left:18%;top:25%;width:32%;height:50%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.75) 0%,rgba(100,250,255,0.35) 35%,transparent 70%);"></div>' +
+        '<div class="ph-uwl" style="left:40%;top:18%;width:28%;height:45%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.65) 0%,rgba(80,240,255,0.3) 30%,transparent 65%);"></div>' +
+        '<div class="ph-uwl" style="left:62%;top:28%;width:30%;height:48%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.7) 0%,rgba(90,245,255,0.32) 32%,transparent 68%);"></div>' +
+        /* Ripples (only when running) */
+        ripples +
+      '</div>' +
 
-    /* Palm trunk */
-    '<path d="M85,340 C83,280 78,220 82,170 C84,150 88,130 90,115" stroke="#2d1a08" stroke-width="14" fill="none" stroke-linecap="round"/>' +
-    '<path d="M85,340 C83,280 78,220 82,170 C84,150 88,130 90,115" stroke="#3d2510" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.6"/>' +
-    /* Palm fronds */
-    frondPaths +
+      /* Layer 8: palm silhouette via data-URI SVG background – filled shapes only */
+      '<div class="ph-palm" style="' +
+        'left:0;top:0;width:16%;height:68%;' +
+        'background-image:url(\'data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 80 200%22%3E%3Cpath d%3D%22M40 200 C39 170 37 140 38 110 C39 80 41 60 42 45 C43 60 44 80 45 110 C46 140 43 170 42 200Z%22 fill%3D%22%23100804%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2222%22 ry%3D%228%22 fill%3D%22%23071207%22 opacity%3D%220.9%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2228%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(-20 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2225%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(25 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(-45 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(50 42 45)%22%2F%3E%3C%2Fsvg%3E\');' +
+        'background-repeat:no-repeat;background-position:center bottom;background-size:contain;' +
+        'opacity:0.85;filter:blur(1px);' +
+      '"></div>' +
 
-    /* Wooden deck base */
-    '<rect x="0" y="175" width="800" height="165" fill="#3a2410"/>' +
-    /* Deck color variation strips */
-    '<rect x="0" y="175" width="800" height="40" fill="#422a14" opacity="0.5"/>' +
-    '<rect x="0" y="280" width="800" height="60" fill="#2e1c0c" opacity="0.4"/>' +
-    /* Plank lines */
-    plankLines +
+      /* Layer 9: deck furniture (umbrella + chairs as blurred dark shapes) */
+      '<div class="ph-furniture" style="' +
+        'right:22%;top:38%;width:20%;height:28%;' +
+        'background:' +
+          'radial-gradient(ellipse 55% 25% at 50% 15%, rgba(15,15,30,0.88) 0%, transparent 100%),' +
+          'linear-gradient(to bottom, transparent 20%, rgba(15,15,30,0.72) 20%, rgba(15,15,30,0.72) 75%, transparent 75%);' +
+        'background-size:70% 100%, 3px 55%;' +
+        'background-position:center top, center 20%;' +
+        'background-repeat:no-repeat;' +
+      '"></div>' +
 
-    /* Ground uplights */
-    lampEls +
+      /* Layer 10: vignette depth overlay */
+      '<div class="ph-vignette" style="' +
+        'inset:0;' +
+        'background:radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(0,0,0,0.4) 100%);' +
+      '"></div>' +
 
-    /* Pool coping (light rim surrounding pool) */
-    '<ellipse cx="430" cy="260" rx="286" ry="83" fill="url(#pool-rim)" opacity="0.25"/>' +
-    '<ellipse cx="430" cy="260" rx="286" ry="83" fill="none" stroke="#9ca3af" stroke-width="3"/>' +
-
-    /* Pool water */
-    '<ellipse cx="430" cy="260" rx="282" ry="79" fill="url(#pool-water)"/>' +
-
-    /* Underwater lights */
-    '<ellipse cx="320" cy="248" rx="70" ry="28" fill="url(#uwl)"/>' +
-    '<ellipse cx="445" cy="238" rx="55" ry="22" fill="url(#uwl)"/>' +
-    '<ellipse cx="555" cy="252" rx="60" ry="24" fill="url(#uwl)"/>' +
-
-    /* Caustic highlights */
-    causticEls +
-
-    /* Pool rim inner highlight */
-    '<ellipse cx="430" cy="185" rx="270" ry="40" fill="none" stroke="white" stroke-width="1.5" opacity="0.2"/>' +
-
-    /* Ripple animations */
-    rippleEls +
-
-    /* Pool ladder (right side) */
-    '<rect x="665" y="230" width="3" height="55" fill="#c8cdd4" rx="1.5"/>' +
-    '<rect x="675" y="230" width="3" height="55" fill="#c8cdd4" rx="1.5"/>' +
-    '<rect x="662" y="240" width="19" height="2" fill="#c8cdd4" rx="1"/>' +
-    '<rect x="662" y="253" width="19" height="2" fill="#c8cdd4" rx="1"/>' +
-    '<rect x="662" y="266" width="19" height="2" fill="#c8cdd4" rx="1"/>' +
-    '<rect x="662" y="279" width="19" height="2" fill="#c8cdd4" rx="1"/>' +
-
-    /* Deck furniture: umbrella */
-    '<ellipse cx="510" cy="192" rx="48" ry="18" fill="#1a1a2e" opacity="0.85"/>' +
-    '<path d="M510,192 C500,182 488,176 474,175" stroke="#252540" stroke-width="2" fill="none"/>' +
-    '<path d="M510,192 C510,182 510,176 510,174" stroke="#252540" stroke-width="2" fill="none"/>' +
-    '<path d="M510,192 C520,182 532,176 546,175" stroke="#252540" stroke-width="2" fill="none"/>' +
-    '<line x1="510" y1="192" x2="510" y2="228" stroke="#1a1a2e" stroke-width="3"/>' +
-
-    /* Deck chairs */
-    '<rect x="472" y="218" width="46" height="18" rx="4" fill="#141422" opacity="0.85"/>' +
-    '<rect x="476" y="210" width="12" height="12" rx="2" fill="#141422" opacity="0.8"/>' +
-    '<rect x="536" y="218" width="46" height="18" rx="4" fill="#141422" opacity="0.85"/>' +
-    '<rect x="540" y="210" width="12" height="12" rx="2" fill="#141422" opacity="0.8"/>' +
-
-    /* Subtle cyan glow below pool onto deck */
-    '<ellipse cx="430" cy="342" rx="200" ry="18" fill="#00d4ff" opacity="0.07"/>' +
-
-  '</svg>';
+    '</div>';
 }
 
-// ── Pump SVG ─────────────────────────────────────────────────────────────────
+// ── Pump SVG (improved 3D shading, no visible cartoon outlines) ──────────────
 
 function buildPumpSvg(running) {
-  var ringColor = running ? '#22d3ee' : '#374151';
-  var ringGlow  = running ? 'filter:drop-shadow(0 0 5px #22d3ee);' : '';
-  var ringClass = running ? ' class="pump-ring-run"' : '';
-  var statusDot = running ? '#22c55e' : '#374151';
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 104 80" width="104" height="80">' +
+  var ringColor  = running ? '#22d3ee' : '#2a3a50';
+  var ringGlow   = running ? 'filter:drop-shadow(0 0 6px #22d3ee) drop-shadow(0 0 12px #0099cc);' : '';
+  var ringClass  = running ? ' class="pump-ring-run"' : '';
+  var statusDot  = running ? '#22c55e' : '#374151';
+  var centerDot  = running ? '#22d3ee' : '#374151';
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90">' +
+    '<defs>' +
+      '<radialGradient id="pg-vol" cx="38%" cy="35%" r="65%">' +
+        '<stop offset="0%" stop-color="#2d3c50"/>' +
+        '<stop offset="100%" stop-color="#0e1620"/>' +
+      '</radialGradient>' +
+      '<linearGradient id="pg-mot" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<stop offset="0%" stop-color="#1a2535"/>' +
+        '<stop offset="100%" stop-color="#0e1620"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="pg-pip" x1="0%" y1="0%" x2="0%" y2="100%">' +
+        '<stop offset="0%" stop-color="#1e2d3e"/>' +
+        '<stop offset="100%" stop-color="#0e1820"/>' +
+      '</linearGradient>' +
+    '</defs>' +
     /* Base plate */
-    '<rect x="8" y="66" width="88" height="8" rx="2" fill="#1a2030"/>' +
-    /* Main pump body (volute) */
-    '<ellipse cx="42" cy="48" rx="28" ry="18" fill="#1e2a3a"/>' +
-    '<ellipse cx="42" cy="48" rx="28" ry="18" fill="none" stroke="#2d3e52" stroke-width="1.5"/>' +
+    '<rect x="8" y="74" width="104" height="10" rx="3" fill="#0f1822"/>' +
+    '<rect x="8" y="74" width="104" height="3" rx="3" fill="rgba(255,255,255,0.05)"/>' +
+    /* Volute pump body */
+    '<ellipse cx="44" cy="50" rx="30" ry="22" fill="url(#pg-vol)"/>' +
+    /* Volute specular */
+    '<ellipse cx="36" cy="41" rx="11" ry="6" fill="rgba(255,255,255,0.05)"/>' +
     /* Inlet pipe */
-    '<rect x="6" y="42" width="16" height="12" rx="3" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1.2"/>' +
-    '<rect x="2" y="44" width="7" height="8" rx="2" fill="#162030"/>' +
-    /* Outlet pipe (top) */
-    '<rect x="34" y="26" width="10" height="14" rx="2" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1.2"/>' +
+    '<rect x="6" y="43" width="16" height="14" rx="4" fill="url(#pg-pip)"/>' +
+    '<rect x="2" y="45" width="6" height="10" rx="2" fill="#0b1520"/>' +
+    /* Outlet pipe top */
+    '<rect x="36" y="28" width="12" height="14" rx="3" fill="url(#pg-pip)"/>' +
     /* Motor housing */
-    '<rect x="64" y="34" width="28" height="28" rx="6" fill="#161e2c"/>' +
-    '<rect x="64" y="34" width="28" height="28" rx="6" fill="none" stroke="#2d3e52" stroke-width="1.5"/>' +
-    /* Motor connection */
-    '<rect x="68" y="44" width="4" height="8" rx="1" fill="#2a3a50"/>' +
-    /* Blue LED ring on motor */
-    '<g' + ringClass + ' style="transform-origin:78px 48px;' + ringGlow + '">' +
-      '<circle cx="78" cy="48" r="11" fill="none" stroke="' + ringColor + '" stroke-width="3" opacity="0.9"/>' +
-      '<circle cx="78" cy="48" r="7" fill="none" stroke="' + ringColor + '" stroke-width="1.5" opacity="0.5"/>' +
+    '<rect x="68" y="32" width="40" height="36" rx="8" fill="url(#pg-mot)"/>' +
+    /* Motor highlight strip */
+    '<rect x="69" y="33" width="4" height="34" rx="2" fill="rgba(255,255,255,0.06)"/>' +
+    /* Connection flange */
+    '<rect x="64" y="44" width="6" height="10" rx="1" fill="#1a2a3a"/>' +
+    /* LED ring group */
+    '<g' + ringClass + ' style="transform-origin:88px 50px;' + ringGlow + '">' +
+      (running ?
+        '<circle cx="88" cy="50" r="17" fill="none" stroke="#22d3ee" stroke-width="4" opacity="0.12"/>' +
+        '<circle cx="88" cy="50" r="13" fill="none" stroke="#22d3ee" stroke-width="3" opacity="0.9"/>' +
+        '<circle cx="88" cy="50" r="9" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.55"/>' :
+        '<circle cx="88" cy="50" r="13" fill="none" stroke="#2a3a50" stroke-width="3" opacity="0.8"/>'
+      ) +
     '</g>' +
-    /* Center impeller dot */
-    '<circle cx="42" cy="48" r="5" fill="#253040"/>' +
-    '<circle cx="42" cy="48" r="3" fill="' + (running ? '#22d3ee' : '#374151') + '" opacity="0.6"/>' +
-    /* Status indicator */
-    '<circle cx="94" cy="34" r="4" fill="' + statusDot + '" opacity="0.9"/>' +
+    /* Impeller centre */
+    '<circle cx="44" cy="50" r="5" fill="#1a2535"/>' +
+    '<circle cx="44" cy="50" r="3" fill="' + centerDot + '" opacity="0.55"/>' +
+    /* Status dot */
+    '<circle cx="110" cy="32" r="4" fill="' + statusDot + '" opacity="0.9"/>' +
   '</svg>';
 }
 
-// ── Filter SVG ───────────────────────────────────────────────────────────────
+// ── Filter SVG (improved cylinder + realistic gauge) ─────────────────────────
 
 function buildFilterSvg() {
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 100" width="70" height="100">' +
-    /* Pipe top */
-    '<rect x="29" y="2" width="12" height="14" rx="3" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1"/>' +
-    /* Dome cap */
-    '<ellipse cx="35" cy="20" rx="20" ry="7" fill="#1a2030"/>' +
-    '<path d="M15,20 Q15,12 35,12 Q55,12 55,20" fill="#1a2030"/>' +
-    /* Main cylinder body */
-    '<rect x="15" y="18" width="40" height="55" rx="4" fill="#1e2a3a"/>' +
-    '<rect x="15" y="18" width="40" height="55" rx="4" fill="none" stroke="#2d3e52" stroke-width="1.5"/>' +
-    /* 3D highlight on cylinder */
-    '<rect x="17" y="20" width="6" height="51" rx="3" fill="white" opacity="0.04"/>' +
-    /* Band lines on tank */
-    '<rect x="15" y="34" width="40" height="2" rx="1" fill="#253040"/>' +
-    '<rect x="15" y="55" width="40" height="2" rx="1" fill="#253040"/>' +
-    /* Pressure gauge (white circle with needle) */
-    '<circle cx="49" cy="38" r="10" fill="#e8e8e8"/>' +
-    '<circle cx="49" cy="38" r="10" fill="none" stroke="#9ca3af" stroke-width="1"/>' +
-    '<circle cx="49" cy="38" r="7" fill="none" stroke="#d1d5db" stroke-width="0.8"/>' +
-    /* Gauge needle */
-    '<line x1="49" y1="38" x2="53" y2="32" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round"/>' +
-    '<circle cx="49" cy="38" r="1.5" fill="#374151"/>' +
-    /* Gauge label */
-    '<text x="49" y="51" text-anchor="middle" font-size="5" fill="#9ca3af">bar</text>' +
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" width="80" height="120">' +
+    '<defs>' +
+      '<linearGradient id="fg-cyl" x1="0%" y1="0%" x2="100%" y2="0%">' +
+        '<stop offset="0%" stop-color="#1a2530"/>' +
+        '<stop offset="30%" stop-color="#243344"/>' +
+        '<stop offset="70%" stop-color="#1e2c3c"/>' +
+        '<stop offset="100%" stop-color="#0e1520"/>' +
+      '</linearGradient>' +
+    '</defs>' +
+    /* Pipe fittings */
+    '<rect x="0" y="28" width="14" height="8" rx="3" fill="#131b26"/>' +
+    '<rect x="66" y="74" width="14" height="8" rx="3" fill="#131b26"/>' +
+    /* Main cylinder */
+    '<rect x="12" y="18" width="56" height="80" rx="2" fill="url(#fg-cyl)"/>' +
+    /* Cylinder highlight */
+    '<rect x="14" y="20" width="5" height="76" rx="2" fill="rgba(255,255,255,0.04)"/>' +
+    /* Top dome cap */
+    '<ellipse cx="40" cy="18" rx="28" ry="10" fill="#1e2c3c"/>' +
+    '<ellipse cx="40" cy="8" rx="18" ry="7" fill="#141e2c"/>' +
+    /* Bottom cap */
+    '<ellipse cx="40" cy="98" rx="28" ry="10" fill="#141e2c"/>' +
+    /* Band rings */
+    '<rect x="12" y="33" width="56" height="3" rx="1" fill="rgba(0,0,0,0.4)"/>' +
+    '<rect x="12" y="76" width="56" height="3" rx="1" fill="rgba(0,0,0,0.4)"/>' +
+    /* Pressure gauge face */
+    '<circle cx="40" cy="55" r="16" fill="#e8eaed"/>' +
+    '<circle cx="40" cy="55" r="14" fill="#f4f5f6"/>' +
+    /* Scale marks */
+    '<line x1="40" y1="42" x2="40" y2="45" stroke="#9ca3af" stroke-width="1"/>' +
+    '<line x1="51" y1="45" x2="49" y2="47" stroke="#9ca3af" stroke-width="1"/>' +
+    '<line x1="54" y1="55" x2="51" y2="55" stroke="#9ca3af" stroke-width="1"/>' +
+    '<line x1="29" y1="45" x2="31" y2="47" stroke="#9ca3af" stroke-width="1"/>' +
+    '<line x1="26" y1="55" x2="29" y2="55" stroke="#9ca3af" stroke-width="1"/>' +
+    /* Needle pointing to ~1.2 bar (2 o'clock position) */
+    '<line x1="40" y1="55" x2="48" y2="46" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>' +
+    /* Centre screw */
+    '<circle cx="40" cy="55" r="2.5" fill="#6b7280"/>' +
+    /* Gauge housing ring */
+    '<circle cx="40" cy="55" r="16" fill="none" stroke="#9ca3af" stroke-width="1"/>' +
+    /* Label */
+    '<text x="40" y="67" text-anchor="middle" font-size="5" fill="#6b7280">bar</text>' +
     /* Bottom pipe */
-    '<rect x="26" y="73" width="18" height="10" rx="2" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1"/>' +
-    '<rect x="29" y="83" width="12" height="12" rx="3" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1"/>' +
-    /* Bottom ellipse (3D) */
-    '<ellipse cx="35" cy="73" rx="20" ry="5" fill="#162030" opacity="0.7"/>' +
+    '<rect x="26" y="98" width="28" height="14" rx="3" fill="#131b26"/>' +
   '</svg>';
 }
 
-// ── Doser SVG ────────────────────────────────────────────────────────────────
+// ── Doser SVG (two realistic chemical bottles) ───────────────────────────────
 
 function buildDoserSvg() {
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 95" width="90" height="95">' +
-    /* Mounting rack */
-    '<rect x="5" y="15" width="80" height="68" rx="4" fill="#12192a" stroke="#21262d" stroke-width="1"/>' +
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 100" width="110" height="100">' +
 
-    /* ── LEFT BOTTLE (pH – blue) ── */
-    /* Neck */
-    '<rect x="16" y="18" width="18" height="10" rx="2" fill="#1e3a5f"/>' +
-    '<rect x="19" y="14" width="12" height="8" rx="2" fill="#1a3050"/>' +
-    /* Body */
-    '<rect x="13" y="27" width="24" height="46" rx="3" fill="#1a4a7a" opacity="0.9"/>' +
-    /* Fill level (65%) */
-    '<rect x="14" y="44" width="22" height="28" rx="2" fill="#2176ae" opacity="0.85"/>' +
-    /* Liquid shine */
-    '<rect x="15" y="45" width="4" height="26" rx="2" fill="white" opacity="0.08"/>' +
-    /* Label */
-    '<rect x="15" y="50" width="20" height="12" rx="1" fill="#0d2a4a" opacity="0.7"/>' +
-    '<text x="25" y="59" text-anchor="middle" font-size="7" font-weight="700" fill="#7dd3fc">pH</text>' +
-    /* Bottle outline */
-    '<rect x="13" y="27" width="24" height="46" rx="3" fill="none" stroke="#3b82f6" stroke-width="1.2"/>' +
+    /* ── LEFT BOTTLE – pH (blue) ── */
     /* Cap */
-    '<rect x="17" y="11" width="14" height="5" rx="2" fill="#93c5fd"/>' +
-
-    /* Peristaltic pump (left) */
-    '<circle cx="25" cy="82" r="6" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1"/>' +
-    '<circle cx="25" cy="82" r="3" fill="#374151"/>' +
-    '<line x1="13" y1="73" x2="19" y2="79" stroke="#1e3a5f" stroke-width="2" stroke-linecap="round"/>' +
-
-    /* ── RIGHT BOTTLE (Cl – red) ── */
+    '<rect x="17" y="6" width="20" height="8" rx="3" fill="#2040a0"/>' +
     /* Neck */
-    '<rect x="52" y="18" width="18" height="10" rx="2" fill="#5f1e1e"/>' +
-    '<rect x="55" y="14" width="12" height="8" rx="2" fill="#501a1a"/>' +
-    /* Body */
-    '<rect x="49" y="27" width="24" height="46" rx="3" fill="#7a1a1a" opacity="0.9"/>' +
-    /* Fill level (65%) */
-    '<rect x="50" y="44" width="22" height="28" rx="2" fill="#ae2121" opacity="0.85"/>' +
-    /* Liquid shine */
-    '<rect x="51" y="45" width="4" height="26" rx="2" fill="white" opacity="0.08"/>' +
+    '<rect x="19" y="13" width="16" height="9" rx="3" fill="rgba(15,30,70,0.85)"/>' +
+    /* Bottle body */
+    '<rect x="9" y="21" width="36" height="64" rx="6" fill="rgba(10,22,55,0.75)" stroke="rgba(100,150,220,0.35)" stroke-width="1"/>' +
+    /* Liquid fill level (~65 %) */
+    '<rect x="10" y="42" width="34" height="42" rx="0" fill="rgba(30,80,190,0.65)"/>' +
+    /* Reflection highlight */
+    '<rect x="12" y="23" width="5" height="58" rx="2" fill="rgba(255,255,255,0.1)"/>' +
     /* Label */
-    '<rect x="51" y="50" width="20" height="12" rx="1" fill="#4a0d0d" opacity="0.7"/>' +
-    '<text x="61" y="59" text-anchor="middle" font-size="7" font-weight="700" fill="#fca5a5">Cl</text>' +
-    /* Bottle outline */
-    '<rect x="49" y="27" width="24" height="46" rx="3" fill="none" stroke="#ef4444" stroke-width="1.2"/>' +
-    /* Cap */
-    '<rect x="53" y="11" width="14" height="5" rx="2" fill="#fca5a5"/>' +
+    '<rect x="13" y="49" width="28" height="20" rx="3" fill="rgba(240,245,255,0.88)"/>' +
+    '<text x="27" y="63" text-anchor="middle" font-size="9" font-weight="700" fill="#1a3060">pH</text>' +
 
-    /* Peristaltic pump (right) */
-    '<circle cx="61" cy="82" r="6" fill="#1e2a3a" stroke="#2d3e52" stroke-width="1"/>' +
-    '<circle cx="61" cy="82" r="3" fill="#374151"/>' +
-    '<line x1="73" y1="73" x2="67" y2="79" stroke="#5f1e1e" stroke-width="2" stroke-linecap="round"/>' +
+    /* ── RIGHT BOTTLE – Cl/Redox (red) ── */
+    /* Cap */
+    '<rect x="73" y="6" width="20" height="8" rx="3" fill="#b01010"/>' +
+    /* Neck */
+    '<rect x="75" y="13" width="16" height="9" rx="3" fill="rgba(70,15,15,0.85)"/>' +
+    /* Bottle body */
+    '<rect x="65" y="21" width="36" height="64" rx="6" fill="rgba(55,10,10,0.75)" stroke="rgba(220,80,80,0.35)" stroke-width="1"/>' +
+    /* Liquid fill level */
+    '<rect x="66" y="42" width="34" height="42" rx="0" fill="rgba(165,20,20,0.65)"/>' +
+    /* Reflection highlight */
+    '<rect x="68" y="23" width="5" height="58" rx="2" fill="rgba(255,255,255,0.1)"/>' +
+    /* Label */
+    '<rect x="69" y="49" width="28" height="20" rx="3" fill="rgba(255,240,240,0.88)"/>' +
+    '<text x="83" y="63" text-anchor="middle" font-size="9" font-weight="700" fill="#600d0d">Cl</text>' +
 
   '</svg>';
 }
@@ -565,27 +533,27 @@ class PoolControlCenterCard extends HTMLElement {
     if (!this._hass || !this._E) return;
     var E = this._E;
 
-    var running  = this._isOn(E.running);
-    var autoOn   = this._isOn(E.automation);
-    var warning  = this._isOn(E.warning);
-    var status   = this._val(E.status, 'unknown');
-    var power    = this._val(E.power, '–');
-    var voltage  = this._val(E.voltage, '–');
-    var current  = this._val(E.current, '–');
-    var freq     = this._val(E.frequency, '–');
-    var energy   = this._val(E.energy, '–');
-    var eff      = this._val(E.efficiency, '–');
-    var runtime  = this._val(E.runtimeToday, '–');
+    var running   = this._isOn(E.running);
+    var autoOn    = this._isOn(E.automation);
+    var warning   = this._isOn(E.warning);
+    var status    = this._val(E.status, 'unknown');
+    var power     = this._val(E.power, '–');
+    var voltage   = this._val(E.voltage, '–');
+    var current   = this._val(E.current, '–');
+    var freq      = this._val(E.frequency, '–');
+    var energy    = this._val(E.energy, '–');
+    var eff       = this._val(E.efficiency, '–');
+    var runtime   = this._val(E.runtimeToday, '–');
     var remaining = this._val(E.remaining, '–');
     var nextStart = this._val(E.nextStart, '–');
-    var target   = this._val(E.target, '–');
-    var ph       = this._val(E.ph, '–');
-    var redox    = this._val(E.redox, '–');
-    var temp     = this._val(E.temperature, '–');
-    var totalRT  = this._val(E.totalRuntime, '–');
-    var seasRT   = this._val(E.seasonRuntime, '–');
-    var maint    = this._val(E.maintenance, '–');
-    var season   = this._val(E.seasonMode, 'auto');
+    var target    = this._val(E.target, '–');
+    var ph        = this._val(E.ph, '–');
+    var redox     = this._val(E.redox, '–');
+    var temp      = this._val(E.temperature, '–');
+    var totalRT   = this._val(E.totalRuntime, '–');
+    var seasRT    = this._val(E.seasonRuntime, '–');
+    var maint     = this._val(E.maintenance, '–');
+    var season    = this._val(E.seasonMode, 'auto');
 
     var statusLabel = STATUS_LABEL[status] || status;
     var seasonLabel = SEASON_LABEL[season]  || season;
@@ -603,18 +571,17 @@ class PoolControlCenterCard extends HTMLElement {
     var maintNum = parseFloat(maint);
     var maintCountdown = '–';
     if (!isNaN(maintNum)) {
-      var remaining500 = Math.max(0, 500 - maintNum);
-      maintCountdown = remaining500.toFixed(0);
+      maintCountdown = Math.max(0, 500 - maintNum).toFixed(0);
     }
 
-    /* SVGs */
-    var poolSvg  = buildPoolSvg(running);
+    /* Build visuals */
+    var poolHero = buildPoolHero(running);
     var pumpSvg  = buildPumpSvg(running);
     var filtSvg  = buildFilterSvg();
     var doserSvg = buildDoserSvg();
 
     /* ── Header ── */
-    var autoBadgeTitle = autoOn ? 'Automatik aktiv'       : 'Automatik aus';
+    var autoBadgeTitle = autoOn ? 'Automatik aktiv'          : 'Automatik aus';
     var autoBadgeSub   = autoOn ? 'System läuft automatisch' : 'Manueller Betrieb';
     var dotClass       = autoOn ? 'on' : 'off';
 
@@ -639,26 +606,23 @@ class PoolControlCenterCard extends HTMLElement {
     '</div>';
 
     /* ── Tech panel ── */
-    var pumpStatus  = running ? '<span class="tech-col-status">Läuft</span>'    : '<span class="tech-col-status off">Aus</span>';
+    var pumpStatus  = running ? '<span class="tech-col-status">Läuft</span>' : '<span class="tech-col-status off">Aus</span>';
     var filtStatus  = warning ? '<span class="tech-col-status warn">Achtung</span>' : '<span class="tech-col-status">OK</span>';
     var doserStatus = '<span class="tech-col-status">OK</span>';
 
     var tech = '<div class="tech-panel">' +
       '<div class="tech-hdr">Technik</div>' +
       '<div class="tech-grid">' +
-        /* Pump */
         '<div class="tech-col">' +
           '<div class="tech-col-hdr"><span class="tech-col-icon">🔧</span><span class="tech-col-name">Poolpumpe</span>' + pumpStatus + '</div>' +
           '<div class="tech-visual">' + pumpSvg + '</div>' +
           '<div class="tech-col-metrics"><b>⚡ ' + power + '</b> W &nbsp; <b>⌇ ' + current + '</b> A</div>' +
         '</div>' +
-        /* Filter */
         '<div class="tech-col">' +
           '<div class="tech-col-hdr"><span class="tech-col-icon">🏺</span><span class="tech-col-name">Sandfilter</span>' + filtStatus + '</div>' +
           '<div class="tech-visual">' + filtSvg + '</div>' +
           '<div class="tech-col-metrics"><b>⊙ –</b> bar</div>' +
         '</div>' +
-        /* Doser */
         '<div class="tech-col">' +
           '<div class="tech-col-hdr"><span class="tech-col-icon">🧪</span><span class="tech-col-name">Dosieranlage</span>' + doserStatus + '</div>' +
           '<div class="tech-visual">' + doserSvg + '</div>' +
@@ -670,7 +634,7 @@ class PoolControlCenterCard extends HTMLElement {
 
     /* ── Main area ── */
     var mainArea = '<div class="main-area">' +
-      '<div class="pool-area">' + poolSvg + '</div>' +
+      '<div class="pool-area">' + poolHero + '</div>' +
       tech +
     '</div>';
 
@@ -679,43 +643,36 @@ class PoolControlCenterCard extends HTMLElement {
     var statSub   = running ? 'Pumpe aktiv' : 'Pumpe inaktiv';
 
     var statBar = '<div class="stat-bar">' +
-      /* Status */
       '<div class="stat-cell">' +
         '<div class="stat-label">Status</div>' +
         '<div class="stat-main"><span class="stat-ico" style="color:#22c55e;">▶</span><span class="stat-val' + statClass + '">' + statusLabel + '</span></div>' +
         '<div class="stat-sub">' + statSub + '</div>' +
       '</div>' +
-      /* Leistung */
       '<div class="stat-cell">' +
         '<div class="stat-label">Leistung</div>' +
         '<div class="stat-main"><span class="stat-ico" style="color:#eab308;">⚡</span><span class="stat-val yellow">' + power + '</span><span class="stat-unit">W</span></div>' +
         '<div class="stat-sub">Aktuelle Leistung</div>' +
       '</div>' +
-      /* Spannung */
       '<div class="stat-cell">' +
         '<div class="stat-label">Spannung</div>' +
         '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">〜</span><span class="stat-val blue">' + voltage + '</span><span class="stat-unit">V</span></div>' +
         '<div class="stat-sub">Netzspannung</div>' +
       '</div>' +
-      /* Strom */
       '<div class="stat-cell">' +
         '<div class="stat-label">Strom</div>' +
         '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⏦</span><span class="stat-val blue">' + current + '</span><span class="stat-unit">A</span></div>' +
         '<div class="stat-sub">Aktueller Strom</div>' +
       '</div>' +
-      /* Frequenz */
       '<div class="stat-cell">' +
         '<div class="stat-label">Frequenz</div>' +
         '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⊟</span><span class="stat-val blue">' + freq + '</span><span class="stat-unit">Hz</span></div>' +
         '<div class="stat-sub">Netzfrequenz</div>' +
       '</div>' +
-      /* Effizienz */
       '<div class="stat-cell">' +
         '<div class="stat-label">Effizienz</div>' +
         '<div class="stat-main"><span class="stat-ico">🌿</span><span class="stat-val green">' + eff + '</span><span class="stat-unit">%</span></div>' +
         '<div class="stat-sub">Aktuelle Effizienz</div>' +
       '</div>' +
-      /* Energie */
       '<div class="stat-cell">' +
         '<div class="stat-label">Energie</div>' +
         '<div class="stat-main"><span class="stat-ico">🔋</span><span class="stat-val orange">' + energy + '</span><span class="stat-unit">Wh</span></div>' +
@@ -729,7 +686,6 @@ class PoolControlCenterCard extends HTMLElement {
 
     var bottom = '<div class="bottom">' +
 
-      /* LAUFZEITEN */
       '<div class="bpanel">' +
         '<div class="bpanel-title">Laufzeiten</div>' +
         '<div class="brow"><span class="brow-ico">▷</span><span class="brow-lbl">Laufzeit heute</span><span class="brow-val">' + runtime + ' h</span></div>' +
@@ -740,7 +696,6 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="prog-pct">' + progPct + '%</div>' +
       '</div>' +
 
-      /* SAISON */
       '<div class="bpanel">' +
         '<div class="bpanel-title">Saison</div>' +
         '<div class="hb-sub" style="font-size:11px;">Aktuelle Saison</div>' +
@@ -750,7 +705,6 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="season-link" id="btn-season-cycle">' + seasonIcon + ' Saisonmodus: ' + seasonLabel + '</div>' +
       '</div>' +
 
-      /* WASSERQUALITÄT */
       '<div class="bpanel">' +
         '<div class="bpanel-title">Wasserqualität</div>' +
         '<div class="brow"><span class="brow-ico">💧</span><span class="brow-lbl">pH-Wert</span><span class="brow-val">' + ph + '</span></div>' +
@@ -759,7 +713,6 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="wq-ok">✓ Alle Werte im optimalen Bereich</div>' +
       '</div>' +
 
-      /* WARTUNG */
       '<div class="bpanel">' +
         '<div class="bpanel-title">Wartung &amp; Betriebsstunden</div>' +
         '<div class="brow"><span class="brow-ico">⚙️</span><span class="brow-lbl">Gesamt</span><span class="brow-val">' + totalRT + ' h</span></div>' +
@@ -768,7 +721,6 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="maint-ok">✓ Nächste Wartung in ' + maintCountdown + ' h</div>' +
       '</div>' +
 
-      /* STEUERUNG */
       '<div class="bpanel ctrl-panel">' +
         '<div class="ctrl-title">Steuerung</div>' +
         '<div class="ctrl-auto-row" id="btn-toggle-auto">' +
