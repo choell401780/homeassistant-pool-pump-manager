@@ -52,5 +52,5 @@ def _device_info(entry: ConfigEntry) -> dict:
         "name": "Pool Pump Manager",
         "manufacturer": "Pool Pump Manager",
         "model": "Virtual Device",
-        "sw_version": "0.5.0",
+        "sw_version": "0.5.1",
     }

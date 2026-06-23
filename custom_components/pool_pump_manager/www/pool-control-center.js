@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.5.0
- * CSS-layered pool hero (no SVG landscape). Improved tech SVGs.
+ * Pool Control Center – Custom Lovelace Card v0.5.1
+ * Custom pool image, functional navigation, improved entity discovery.
  */
 
-const CARD_VERSION = '0.5.0';
+const CARD_VERSION = '0.5.1';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -200,13 +200,57 @@ const CARD_CSS = '' +
 '.nav-btn.active{background:#161b22;color:#22d3ee;}' +
 '.nav-btn:hover:not(.active){color:#e6edf3;background:#0f1419;}' +
 '.nav-ico{font-size:17px;}' +
-'.nav-lbl{font-size:10px;font-weight:500;}';
+'.nav-lbl{font-size:10px;font-weight:500;}' +
+
+/* PAGE CONTENT */
+'.page-body{padding:20px;display:flex;flex-direction:column;gap:14px;}' +
+'.page-hdr{font-size:11px;font-weight:700;letter-spacing:0.15em;color:#7d8590;text-transform:uppercase;padding-bottom:10px;border-bottom:1px solid #21262d;}' +
+'.page-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}' +
+'.page-card{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;}' +
+'.pc-lbl{font-size:10px;color:#7d8590;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;}' +
+'.pc-val{font-size:22px;font-weight:700;color:#e6edf3;line-height:1.2;}' +
+'.pc-sub{font-size:11px;color:#7d8590;word-break:break-all;font-family:monospace;}' +
+'.page-note{font-size:12px;color:#7d8590;background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px 14px;line-height:1.6;}' +
+'.page-note code,.info-id{background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#22d3ee;font-family:monospace;}' +
+'.page-sub-hdr{font-size:10px;font-weight:700;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;margin-top:4px;}' +
+
+/* SETTINGS PAGE */
+'.set-section{display:flex;flex-direction:column;gap:8px;}' +
+'.set-lbl{font-size:11px;font-weight:700;color:#7d8590;text-transform:uppercase;letter-spacing:0.08em;}' +
+'.set-note{font-size:12px;color:#7d8590;line-height:1.6;}' +
+'.season-btns{display:flex;gap:8px;flex-wrap:wrap;}' +
+'.sbtn{padding:8px 14px;border:1px solid #21262d;border-radius:8px;background:#161b22;color:#7d8590;font-size:13px;cursor:pointer;transition:all .2s;position:relative;z-index:10;pointer-events:all;}' +
+'.sbtn:hover{border-color:#373e47;color:#e6edf3;}' +
+'.sbtn.active{background:rgba(34,211,238,0.1);border-color:#22d3ee;color:#22d3ee;font-weight:600;}' +
+
+/* MAINTENANCE PAGE */
+'.maint-row{display:flex;gap:12px;margin-top:4px;}' +
+'.btn-maint-lg{flex:1;padding:14px;background:transparent;border:1px solid #21262d;border-radius:8px;color:#e6edf3;font-size:13px;font-weight:500;cursor:pointer;transition:background .2s,border-color .2s;display:flex;align-items:center;justify-content:center;gap:6px;position:relative;z-index:10;pointer-events:all;}' +
+'.btn-maint-lg:hover{background:#21262d;border-color:#373e47;}' +
+
+/* INFO PAGE */
+'.info-block{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:0 14px;}' +
+'.info-kv{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #21262d;font-size:12px;}' +
+'.info-kv:last-child{border-bottom:none;}' +
+'.info-kv-k{color:#7d8590;}' +
+'.info-kv-v{color:#e6edf3;font-weight:500;}' +
+'.info-link{color:#22d3ee;text-decoration:none;}' +
+'.info-entities{display:flex;flex-direction:column;gap:3px;max-height:260px;overflow-y:auto;}' +
+'.info-row{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;background:#161b22;border:1px solid #21262d;}' +
+'.info-ok{color:#22c55e;font-size:13px;width:14px;flex-shrink:0;}' +
+'.info-miss{color:#ef4444;font-size:13px;width:14px;flex-shrink:0;}' +
+'.info-val{color:#e6edf3;font-weight:600;min-width:50px;text-align:right;font-size:11px;}' +
+
+/* USER POOL IMAGE layer */
+'.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}';
 
 // ── Pool Hero (CSS layered divs – no SVG landscape) ───────────────────────────
 
-function buildPoolHero(running) {
+function buildPoolHero(running, imgUrl) {
   var ripples = running ?
     '<div class="ph-ripple"></div><div class="ph-ripple ph-ripple-2"></div>' : '';
+  var userImgLayer = imgUrl ?
+    '<div class="ph-user-img" style="inset:0;background-image:url(\'' + imgUrl + '\');"></div>' : '';
 
   return '' +
     '<div class="pool-hero">' +
@@ -306,6 +350,9 @@ function buildPoolHero(running) {
         'inset:0;' +
         'background:radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(0,0,0,0.4) 100%);' +
       '"></div>' +
+
+      /* Layer 11: user-provided background image (auto-fallback if URL 404s) */
+      userImgLayer +
 
     '</div>';
 }
@@ -456,6 +503,130 @@ function buildDoserSvg() {
   '</svg>';
 }
 
+// ── Page Builders ────────────────────────────────────────────────────────────
+
+function buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT) {
+  return '<div class="page-body">' +
+    '<div class="page-hdr">Laufzeiten</div>' +
+    '<div class="page-grid">' +
+      '<div class="page-card"><div class="pc-lbl">Laufzeit heute</div><div class="pc-val">' + runtime + ' h</div>' +
+        '<div class="prog-wrap" style="margin-top:6px"><div class="prog-fill" style="width:' + progPct + '%"></div></div>' +
+        '<div class="prog-pct">' + progPct + '% von ' + target + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Restlaufzeit</div><div class="pc-val">' + remaining + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Nächster Start</div><div class="pc-val" style="font-size:18px;">' + nextStart + '</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Tagesziel</div><div class="pc-val">' + target + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Saisonlaufzeit</div><div class="pc-val">' + seasRT + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Gesamtlaufzeit</div><div class="pc-val">' + totalRT + ' h</div></div>' +
+    '</div>' +
+    '<div class="page-note">📊 Für Diagramme das HA Energie-Dashboard oder den HA Verlauf verwenden.</div>' +
+  '</div>';
+}
+
+function buildPageSettings(autoOn, season) {
+  var toggleClass = autoOn ? 'on' : 'off';
+  var toggleLbl   = autoOn ? 'EIN' : 'AUS';
+  var seasons = [
+    { k: 'auto',   i: '⚙️', l: 'Auto' },
+    { k: 'spring', i: '🌸', l: 'Frühling' },
+    { k: 'summer', i: '☀️', l: 'Sommer' },
+    { k: 'autumn', i: '🍂', l: 'Herbst' },
+    { k: 'winter', i: '❄️', l: 'Winter' },
+  ];
+  var sBtns = '';
+  for (var si = 0; si < seasons.length; si++) {
+    var s = seasons[si];
+    sBtns += '<button class="sbtn' + (season === s.k ? ' active' : '') + '" data-season="' + s.k + '">' + s.i + ' ' + s.l + '</button>';
+  }
+  return '<div class="page-body">' +
+    '<div class="page-hdr">Einstellungen</div>' +
+    '<div class="set-section">' +
+      '<div class="set-lbl">Automatik</div>' +
+      '<div class="ctrl-auto-row" id="btn-toggle-auto-s">' +
+        '<span class="ctrl-auto-lbl">Automatikmodus</span>' +
+        '<div class="ctrl-toggle-wrap">' +
+          '<span class="ctrl-toggle-lbl ' + toggleClass + '">' + toggleLbl + '</span>' +
+          '<button class="toggle-pill ' + toggleClass + '" aria-label="Automatik"></button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="set-section">' +
+      '<div class="set-lbl">Saisonmodus</div>' +
+      '<div class="season-btns">' + sBtns + '</div>' +
+    '</div>' +
+    '<div class="set-section">' +
+      '<div class="set-lbl">Tagesziel</div>' +
+      '<div class="set-note">Wird automatisch berechnet (Poolvolumen × Umwälzungen ÷ Förderleistung).<br>Ändern: Einstellungen → Integrationen → Pool Pump Manager → Konfigurieren.</div>' +
+    '</div>' +
+    '<div class="set-section">' +
+      '<div class="set-lbl">Eigenes Poolbild</div>' +
+      '<div class="set-note">Bilddatei speichern unter:<br><code>/config/www/pool-pump-manager/pool-background.jpg</code><br>Die Card lädt das Bild automatisch beim nächsten Seitenaufruf.<br><br>Alternativ in der Card-Konfiguration:<br><code>pool_image: /local/mein-pool.jpg</code></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildPageMaintenance(maint, totalRT, seasRT, maintCountdown) {
+  return '<div class="page-body">' +
+    '<div class="page-hdr">Wartung</div>' +
+    '<div class="page-grid">' +
+      '<div class="page-card"><div class="pc-lbl">Gesamtlaufzeit</div><div class="pc-val">' + totalRT + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Saisonlaufzeit</div><div class="pc-val">' + seasRT + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Seit letzter Wartung</div><div class="pc-val">' + maint + ' h</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Nächste Wartung in</div><div class="pc-val" style="color:#22c55e;">' + maintCountdown + ' h</div></div>' +
+    '</div>' +
+    '<div class="maint-row">' +
+      '<button class="btn-maint-lg" id="btn-maint">🔧 Wartung Reset</button>' +
+      '<button class="btn-maint-lg" id="btn-season-reset">📅 Saison Reset</button>' +
+    '</div>' +
+    '<div class="page-note">Reset setzt den jeweiligen Stundenzähler auf 0 zurück.</div>' +
+  '</div>';
+}
+
+function buildPageHistory() {
+  return '<div class="page-body">' +
+    '<div class="page-hdr">Historie</div>' +
+    '<div class="page-note">📊 Für Energieverbrauch- und Laufzeit-Diagramme das HA Energie-Dashboard oder den HA Verlauf (Entwicklerwerkzeuge) verwenden.</div>' +
+    '<div class="page-grid">' +
+      '<div class="page-card"><div class="pc-lbl">Leistungsverlauf</div><div class="pc-sub">sensor.pool_pump_manager_power</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Energieverbrauch</div><div class="pc-sub">sensor.pool_pump_manager_energy</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Laufzeiten</div><div class="pc-sub">sensor.pool_pump_manager_runtime_today</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Effizienz</div><div class="pc-sub">sensor.pool_pump_manager_efficiency</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Saisonlaufzeit</div><div class="pc-sub">sensor.pool_pump_manager_season_runtime</div></div>' +
+      '<div class="page-card"><div class="pc-lbl">Gesamtlaufzeit</div><div class="pc-sub">sensor.pool_pump_manager_total_runtime</div></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildPageInfo(E, hass) {
+  var rows = '';
+  if (E && hass && hass.states) {
+    var keys = Object.keys(E);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var id  = E[key];
+      var state = hass.states[id];
+      var val = state ? state.state : 'nicht gefunden';
+      var cls = state ? 'info-ok' : 'info-miss';
+      var sym = state ? '✓' : '✗';
+      rows += '<div class="info-row">' +
+        '<span class="' + cls + '">' + sym + '</span>' +
+        '<span style="flex:1;font-size:10px;color:#7d8590;word-break:break-all;">' + id + '</span>' +
+        '<span class="info-val">' + val + '</span>' +
+      '</div>';
+    }
+  }
+  return '<div class="page-body">' +
+    '<div class="page-hdr">Info</div>' +
+    '<div class="info-block">' +
+      '<div class="info-kv"><span class="info-kv-k">Integration</span><span class="info-kv-v">Pool Pump Manager</span></div>' +
+      '<div class="info-kv"><span class="info-kv-k">Card Version</span><span class="info-kv-v">v' + CARD_VERSION + '</span></div>' +
+      '<div class="info-kv"><span class="info-kv-k">Repository</span><span class="info-kv-v"><a class="info-link" href="https://github.com/choell401780/homeassistant-pool-pump-manager" target="_blank">GitHub ↗</a></span></div>' +
+      '<div class="info-kv"><span class="info-kv-k">Installation</span><span class="info-kv-v">HACS Custom Repository</span></div>' +
+    '</div>' +
+    '<div class="page-sub-hdr">Entities (' + Object.keys(E || {}).length + ')</div>' +
+    '<div class="info-entities">' + rows + '</div>' +
+  '</div>';
+}
+
 // ── Card Class ───────────────────────────────────────────────────────────────
 
 class PoolControlCenterCard extends HTMLElement {
@@ -465,6 +636,7 @@ class PoolControlCenterCard extends HTMLElement {
     this._hass = null;
     this._E    = null;
     this._cfg  = {};
+    this._page = 'overview';
     LOG.debug('Card constructed, version:', CARD_VERSION);
   }
 
@@ -476,6 +648,7 @@ class PoolControlCenterCard extends HTMLElement {
 
   setConfig(config) {
     this._cfg = config || {};
+    if (this._hass) this._render();
   }
 
   getCardSize() { return 15; }
@@ -483,28 +656,81 @@ class PoolControlCenterCard extends HTMLElement {
   _resolveEntities() {
     var st = this._hass && this._hass.states;
     if (!st) return;
+
+    // Start from defaults
     var resolved = Object.assign({}, ENTITY_DEFAULTS);
-    var keys = Object.keys(ENTITY_FALLBACKS);
-    for (var ki = 0; ki < keys.length; ki++) {
-      var key = keys[ki];
+
+    // Apply explicit fallbacks
+    var fbKeys = Object.keys(ENTITY_FALLBACKS);
+    for (var ki = 0; ki < fbKeys.length; ki++) {
+      var key = fbKeys[ki];
       if (!st[resolved[key]]) {
         var alts = ENTITY_FALLBACKS[key];
         for (var ai = 0; ai < alts.length; ai++) {
-          if (st[alts[ai]]) {
-            LOG.debug('Entity remapped:', key, '->', alts[ai]);
-            resolved[key] = alts[ai];
+          if (st[alts[ai]]) { resolved[key] = alts[ai]; break; }
+        }
+      }
+    }
+
+    // Auto-scan: build suffix→id map for all pool_pump_manager entities
+    var autoMap = {};
+    var allIds = Object.keys(st);
+    for (var si = 0; si < allIds.length; si++) {
+      var id = allIds[si];
+      if (id.indexOf('pool_pump_manager_') !== -1) {
+        var parts = id.split('pool_pump_manager_');
+        if (parts.length > 1) { autoMap[parts[1]] = id; }
+      }
+    }
+    LOG.debug('Auto-scan found suffixes:', Object.keys(autoMap).join(', '));
+
+    // For each key still not found, try auto-map by known suffixes
+    var SUFFIX_MAP = {
+      runtimeToday:  ['runtime_today'],
+      remaining:     ['remaining_runtime', 'remaining'],
+      target:        ['target_runtime', 'target'],
+      totalRuntime:  ['total_runtime'],
+      seasonRuntime: ['season_runtime'],
+      maintenance:   ['runtime_since_maintenance', 'since_maintenance'],
+      efficiency:    ['efficiency'],
+      nextStart:     ['next_start'],
+      power:         ['power'],
+      voltage:       ['voltage'],
+      current:       ['current'],
+      frequency:     ['frequency'],
+      energy:        ['energy'],
+      ph:            ['ph', 'ph_value'],
+      redox:         ['redox'],
+      temperature:   ['pool_temperature', 'temperature', 'water_temperature'],
+    };
+    var smKeys = Object.keys(SUFFIX_MAP);
+    for (var mi = 0; mi < smKeys.length; mi++) {
+      var mkey = smKeys[mi];
+      if (!st[resolved[mkey]]) {
+        var suffixes = SUFFIX_MAP[mkey];
+        for (var sfi = 0; sfi < suffixes.length; sfi++) {
+          if (autoMap[suffixes[sfi]]) {
+            LOG.debug('Auto-mapped:', mkey, '->', autoMap[suffixes[sfi]]);
+            resolved[mkey] = autoMap[suffixes[sfi]];
             break;
           }
         }
       }
-      if (st[resolved[key]]) {
-        LOG.debug('Entity found:', key, '=', resolved[key]);
-      } else {
-        LOG.debug('Entity NOT found:', key, '(', resolved[key], ')');
-      }
     }
+
+    // Log summary
+    var found = [], missing = [];
+    var rKeys = Object.keys(resolved);
+    for (var li = 0; li < rKeys.length; li++) {
+      var lkey = rKeys[li];
+      if (st[resolved[lkey]]) { found.push(lkey); }
+      else { missing.push(lkey); }
+    }
+    LOG.debug('Found (' + found.length + '):', found.join(', '));
+    if (missing.length) { LOG.debug('Missing (' + missing.length + '):', missing.join(', ')); }
+
     this._E = resolved;
-    LOG.info('Entities resolved. v' + CARD_VERSION);
+    LOG.info('Entities resolved. v' + CARD_VERSION + ' — ' + found.length + '/' + rKeys.length + ' found');
   }
 
   _val(id, def) {
@@ -575,7 +801,8 @@ class PoolControlCenterCard extends HTMLElement {
     }
 
     /* Build visuals */
-    var poolHero = buildPoolHero(running);
+    var imgUrl   = (this._cfg && this._cfg.pool_image) ? this._cfg.pool_image : '/local/pool-pump-manager/pool-background.jpg';
+    var poolHero = buildPoolHero(running, imgUrl);
     var pumpSvg  = buildPumpSvg(running);
     var filtSvg  = buildFilterSvg();
     var doserSvg = buildDoserSvg();
@@ -750,17 +977,35 @@ class PoolControlCenterCard extends HTMLElement {
     '</div>';
 
     /* ── Nav bar ── */
+    var page = this._page || 'overview';
+    var nc = function(p) { return 'nav-btn' + (page === p ? ' active' : ''); };
     var nav = '<div class="nav">' +
-      '<button class="nav-btn active" id="nav-overview"><span class="nav-ico">🏠</span><span class="nav-lbl">Übersicht</span></button>' +
-      '<button class="nav-btn" id="nav-runtimes"><span class="nav-ico">🕐</span><span class="nav-lbl">Laufzeiten</span></button>' +
-      '<button class="nav-btn" id="nav-settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Einstellungen</span></button>' +
-      '<button class="nav-btn" id="nav-maintenance"><span class="nav-ico">🔧</span><span class="nav-lbl">Wartung</span></button>' +
-      '<button class="nav-btn" id="nav-history"><span class="nav-ico">📊</span><span class="nav-lbl">Historie</span></button>' +
-      '<button class="nav-btn" id="nav-info"><span class="nav-ico">ℹ</span><span class="nav-lbl">Info</span></button>' +
+      '<button class="' + nc('overview')     + '" data-page="overview"><span class="nav-ico">🏠</span><span class="nav-lbl">Übersicht</span></button>' +
+      '<button class="' + nc('runtimes')     + '" data-page="runtimes"><span class="nav-ico">🕐</span><span class="nav-lbl">Laufzeiten</span></button>' +
+      '<button class="' + nc('settings')     + '" data-page="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Einstellungen</span></button>' +
+      '<button class="' + nc('maintenance')  + '" data-page="maintenance"><span class="nav-ico">🔧</span><span class="nav-lbl">Wartung</span></button>' +
+      '<button class="' + nc('history')      + '" data-page="history"><span class="nav-ico">📊</span><span class="nav-lbl">Historie</span></button>' +
+      '<button class="' + nc('info')         + '" data-page="info"><span class="nav-ico">ℹ</span><span class="nav-lbl">Info</span></button>' +
     '</div>';
 
+    /* ── Page body ── */
+    var body;
+    if (page === 'runtimes') {
+      body = buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT);
+    } else if (page === 'settings') {
+      body = buildPageSettings(autoOn, season);
+    } else if (page === 'maintenance') {
+      body = buildPageMaintenance(maint, totalRT, seasRT, maintCountdown);
+    } else if (page === 'history') {
+      body = buildPageHistory();
+    } else if (page === 'info') {
+      body = buildPageInfo(this._E, this._hass);
+    } else {
+      body = mainArea + statBar + bottom;
+    }
+
     /* ── Assemble ── */
-    var html = '<div class="pcc">' + hdr + mainArea + statBar + bottom + nav + '</div>';
+    var html = '<div class="pcc">' + hdr + body + nav + '</div>';
     this.shadowRoot.innerHTML = '<style>' + CARD_CSS + '</style>' + html;
     this._attach();
   }
@@ -835,6 +1080,30 @@ class PoolControlCenterCard extends HTMLElement {
 
     var elSeaDd = $('btn-season-dd');
     if (elSeaDd) elSeaDd.addEventListener('click', cycleSeason);
+
+    // Settings page: auto toggle row
+    var elToggleS = $('btn-toggle-auto-s');
+    if (elToggleS) elToggleS.addEventListener('click', function() { toggleAuto(); });
+
+    // Settings page: season buttons
+    root.querySelectorAll('.sbtn[data-season]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var opt = this.getAttribute('data-season');
+        fx(this);
+        LOG.debug('Season direct select:', opt);
+        self._svc('select', 'select_option', { entity_id: E.seasonMode, option: opt });
+      });
+    });
+
+    // Navigation buttons — switch page and re-render
+    root.querySelectorAll('.nav-btn[data-page]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var pg = this.getAttribute('data-page');
+        LOG.debug('Nav:', pg);
+        self._page = pg;
+        self._render();
+      });
+    });
   }
 }
 

@@ -336,6 +336,17 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.5.1
+
+- **Eigenes Poolbild**: Automatische Erkennung von `/config/www/pool-pump-manager/pool-background.jpg` — falls vorhanden, wird es über die CSS-Schichten gelegt. Alternativ `pool_image: /local/...` in der Card-Konfiguration
+- **Funktionale Navigation**: Alle 6 Tabs sind jetzt klickbar (Übersicht, Laufzeiten, Einstellungen, Wartung, Historie, Info)
+- **Laufzeiten-Seite**: Laufzeit heute, Restlaufzeit, Nächster Start, Tagesziel, Saisonlaufzeit, Gesamtlaufzeit mit Fortschrittsbalken
+- **Einstellungen-Seite**: Automatik-Toggle, 5 Saisonmodus-Buttons (Auto/Frühling/Sommer/Herbst/Winter mit aktiver Markierung), Anleitung für eigenes Poolbild
+- **Wartungs-Seite**: Gesamtstunden, Saisonstunden, seit Wartung, Nächste Wartung + funktionale Reset-Buttons
+- **Info-Seite**: Version, GitHub-Link, alle Entities mit ✓/✗ Status und aktuellem Wert
+- **Verbesserte Entity-Erkennung**: Auto-Scan aller `pool_pump_manager`-Entities aus `hass.states`, dann Suffix-Mapping für fehlende Werte
+- **console.debug-Logging**: Entity-Discovery-Zusammenfassung (gefunden/nicht gefunden), Navigation-Klicks, Service-Calls
+
 ### v0.5.0
 
 - **Pool-Hero komplett überarbeitet**: SVG-Landschaft (Cartoon-Palme, gezeichnete Hecken) durch atmosphärisches CSS-Layer-System ersetzt
