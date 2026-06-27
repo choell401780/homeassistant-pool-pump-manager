@@ -334,7 +334,72 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ---
 
+## Troubleshooting
+
+### Werte zeigen „–" oder sind leer
+
+**Ursache 1: Metering-Sensoren nicht konfiguriert**
+Leistung, Spannung, Strom, Frequenz und Energie werden von der Integration nur angezeigt, wenn ein physischer Sensor im Config Flow konfiguriert wurde.
+Lösung: Einstellungen → Integrationen → Pool Pump Manager → Konfigurieren → Metering-Sensoren zuweisen.
+
+**Ursache 2: Entity-ID unterscheidet sich vom Default**
+Die Card sucht automatisch nach `sensor.pool_pump_manager_metering_power` etc. Falls die Entities anders heißen, nutzt die Card den Auto-Discovery-Mechanismus (Suffix-Map + Friendly-Name-Fallback).
+Diagnose: Info-Tab öffnen — dort jede Entity mit Status ✓/?/✗ und aktuellem Wert.
+
+**Ursache 3: Wasserqualitäts-Sensoren**
+pH, Redox und Temperatur sind Platzhalter und zeigen immer `unavailable`. Dies ist by design und wird in einer zukünftigen Version konfigurierbar.
+
+### Entity-IDs der Integration (v0.6.0)
+
+| Funktion | Entity-ID |
+|---|---|
+| Automatik | `switch.pool_pump_manager_automation_enabled` |
+| Pumpe läuft | `binary_sensor.pool_pump_manager_running` |
+| Warnung | `binary_sensor.pool_pump_manager_warning` |
+| Status | `sensor.pool_pump_manager_status` |
+| Laufzeit heute | `sensor.pool_pump_manager_runtime_today` |
+| Restlaufzeit | `sensor.pool_pump_manager_remaining_runtime` |
+| Tagesziel | `sensor.pool_pump_manager_target_runtime` |
+| Nächster Start | `sensor.pool_pump_manager_next_start` |
+| Gesamtlaufzeit | `sensor.pool_pump_manager_total_runtime` |
+| Saisonlaufzeit | `sensor.pool_pump_manager_season_runtime` |
+| Seit Wartung | `sensor.pool_pump_manager_runtime_since_maintenance` |
+| Effizienz | `sensor.pool_pump_manager_efficiency` |
+| Leistung* | `sensor.pool_pump_manager_metering_power` |
+| Energie* | `sensor.pool_pump_manager_metering_energy` |
+| Spannung* | `sensor.pool_pump_manager_metering_voltage` |
+| Strom* | `sensor.pool_pump_manager_metering_current` |
+| Frequenz* | `sensor.pool_pump_manager_metering_frequency` |
+| Saisonmodus | `select.pool_pump_manager_season_mode` |
+| Reset Wartung | `button.pool_pump_manager_reset_maintenance` |
+| Reset Saison | `button.pool_pump_manager_reset_season` |
+
+*Erfordert Konfiguration eines externen Metering-Sensors.
+
+### Debug-Modus aktivieren
+
+Zahnrad ⚙ oben rechts → Debug-Modus EIN → Info-Tab öffnen.
+Zeigt für jede Entity: Name · Entity-ID · aktueller Wert + Einheit · letzter Update-Zeitstempel · Fehlerursache.
+
+### Poolbild konfigurieren
+
+Zahnrad ⚙ oben rechts → URL eingeben → Übernehmen.
+Beispiel: `/local/pool.jpg` (Datei unter `/config/www/pool.jpg`)
+Einstellung wird im Browser-`localStorage` gespeichert.
+
+---
+
 ## Changelog
+
+### v0.6.0
+
+- **Root-Cause-Fix: Metering-Sensoren leer** — Entity-IDs korrigiert: Card suchte `sensor.pool_pump_manager_power`, Integration erstellt aber `sensor.pool_pump_manager_metering_power` — behebt leere Werte für Leistung, Energie, Spannung, Strom, Frequenz
+- **Toast-Benachrichtigungen** — nach jedem Service Call kurze Rückmeldung (✓ Pumpe gestartet / ✗ Fehler)
+- **Warning-Badge** im Header — zeigt Anzahl fehlender kritischer Entities; Klick öffnet Info/Diagnose
+- **Nächster Start lesbar** — TIMESTAMP-Sensor wird als „Heute 08:00 Uhr" formatiert statt ISO-String
+- **Performance** — Re-Render nur wenn sich ein Entity-State tatsächlich geändert hat (`_hasRelevantChange`)
+- **Info-Seite: Fehlerursache** — zeigt konkrete Erklärung: „Entity nicht in HA registriert", „Metering-Sensor: externer Sensor nicht konfiguriert", „Platzhalter", „unavailable", „unknown"
+- **README: Troubleshooting + Entity-ID-Tabelle**
 
 ### v0.5.3
 

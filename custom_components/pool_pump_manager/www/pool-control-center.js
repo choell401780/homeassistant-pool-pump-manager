@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.5.3
- * Settings gear modal, pool image via UI, debug mode, page-in animation.
+ * Pool Control Center – Custom Lovelace Card v0.6.0
+ * Fix metering entity IDs, toast feedback, warning badge, timestamp formatting.
  */
 
-const CARD_VERSION = '0.5.3';
+const CARD_VERSION = '0.6.0';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -27,11 +27,11 @@ const ENTITY_DEFAULTS = {
   running:       'binary_sensor.pool_pump_manager_running',
   warning:       'binary_sensor.pool_pump_manager_warning',
   status:        'sensor.pool_pump_manager_status',
-  power:         'sensor.pool_pump_manager_power',
-  energy:        'sensor.pool_pump_manager_energy',
-  voltage:       'sensor.pool_pump_manager_voltage',
-  current:       'sensor.pool_pump_manager_current',
-  frequency:     'sensor.pool_pump_manager_frequency',
+  power:         'sensor.pool_pump_manager_metering_power',
+  energy:        'sensor.pool_pump_manager_metering_energy',
+  voltage:       'sensor.pool_pump_manager_metering_voltage',
+  current:       'sensor.pool_pump_manager_metering_current',
+  frequency:     'sensor.pool_pump_manager_metering_frequency',
   runtimeToday:  'sensor.pool_pump_manager_runtime_today',
   remaining:     'sensor.pool_pump_manager_remaining_runtime',
   target:        'sensor.pool_pump_manager_target_runtime',
@@ -50,11 +50,11 @@ const ENTITY_DEFAULTS = {
 
 const ENTITY_FALLBACKS = {
   temperature: ['sensor.pool_pump_manager_temperature','sensor.pool_pump_manager_water_temperature','sensor.pool_pump_manager_pool_temp'],
-  power:       ['sensor.pool_pump_manager_leistung'],
-  voltage:     ['sensor.pool_pump_manager_spannung'],
-  current:     ['sensor.pool_pump_manager_strom'],
-  frequency:   ['sensor.pool_pump_manager_hz'],
-  energy:      ['sensor.pool_pump_manager_verbrauch'],
+  power:       ['sensor.pool_pump_manager_power','sensor.pool_pump_manager_leistung'],
+  voltage:     ['sensor.pool_pump_manager_voltage','sensor.pool_pump_manager_spannung'],
+  current:     ['sensor.pool_pump_manager_current','sensor.pool_pump_manager_strom'],
+  frequency:   ['sensor.pool_pump_manager_frequency','sensor.pool_pump_manager_hz'],
+  energy:      ['sensor.pool_pump_manager_energy','sensor.pool_pump_manager_verbrauch'],
 };
 
 // ── CSS ──────────────────────────────────────────────────────────────────────
@@ -248,6 +248,17 @@ const CARD_CSS = '' +
 
 /* USER POOL IMAGE layer */
 '.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}' +
+
+/* TOAST NOTIFICATIONS */
+'.toast-wrap{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:400;pointer-events:none;white-space:nowrap;}' +
+'.toast{display:inline-block;background:#161b22;border:1px solid #373e47;border-radius:8px;padding:8px 16px;font-size:13px;color:#e6edf3;animation:toast-in .15s ease;box-shadow:0 6px 20px rgba(0,0,0,0.6);}' +
+'@keyframes toast-in{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}' +
+'.toast.ok{border-color:#22c55e;color:#22c55e;}' +
+'.toast.err{border-color:#ef4444;color:#ef4444;}' +
+
+/* WARNING BADGE */
+'.warn-badge{display:flex;align-items:center;gap:5px;padding:7px 10px;background:rgba(234,179,8,0.12);border:1px solid #eab308;border-radius:8px;color:#eab308;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;transition:background .2s;position:relative;z-index:10;pointer-events:all;}' +
+'.warn-badge:hover{background:rgba(234,179,8,0.22);}' +
 
 /* GEAR BUTTON */
 '.gear-btn{background:transparent;border:1px solid #21262d;color:#7d8590;font-size:18px;cursor:pointer;padding:7px 10px;border-radius:8px;line-height:1;transition:color .2s,background .2s,border-color .2s;position:relative;z-index:10;pointer-events:all;flex-shrink:0;}' +
@@ -548,6 +559,26 @@ function buildDoserSvg() {
   '</svg>';
 }
 
+// ── Utilities ────────────────────────────────────────────────────────────────
+
+function fmtTimestamp(iso) {
+  if (!iso || iso === 'unknown' || iso === 'unavailable' || iso === '–') return '–';
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    var now = new Date();
+    var h = d.getHours().toString();
+    var m = d.getMinutes();
+    m = m < 10 ? '0' + m : '' + m;
+    var isToday = d.getFullYear() === now.getFullYear() &&
+                  d.getMonth() === now.getMonth() &&
+                  d.getDate() === now.getDate();
+    var isTomorrow = (d - now) < 86400000 && !isToday && d > now;
+    var prefix = isToday ? 'Heute ' : (isTomorrow ? 'Morgen ' : '');
+    return prefix + h + ':' + m + ' Uhr';
+  } catch (e) { return iso; }
+}
+
 // ── Page Builders ────────────────────────────────────────────────────────────
 
 function buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT) {
@@ -671,40 +702,61 @@ function buildPageInfo(E, hass, debugMode) {
   var rows = '';
   var cntOk = 0, cntUnavail = 0, cntMiss = 0;
 
+  // Keys where unavailable is expected (placeholder sensors)
+  var PLACEHOLDER_KEYS = { ph: true, redox: true, temperature: true };
+  // Keys that require external sensor configuration
+  var METERING_KEYS = { power: true, energy: true, voltage: true, current: true, frequency: true };
+
   if (E && hass && hass.states) {
     var keys = Object.keys(E);
     for (var i = 0; i < keys.length; i++) {
-      var key     = keys[i];
-      var actId   = E[key];
-      var defId   = ENTITY_DEFAULTS[key] || actId;
+      var key      = keys[i];
+      var actId    = E[key];
+      var defId    = ENTITY_DEFAULTS[key] || actId;
       var remapped = (actId !== defId);
       var stateObj = hass.states[actId];
       var rawState = stateObj ? stateObj.state : null;
       var unit     = stateObj && stateObj.attributes && stateObj.attributes.unit_of_measurement
                        ? stateObj.attributes.unit_of_measurement : '';
       var isUnavail = rawState === 'unavailable' || rawState === 'unknown';
-      var sym, cls, valCls;
+      var sym, cls, valCls, reason;
+
       if (!stateObj) {
         sym = '✗'; cls = 'info-miss'; cntMiss++;
-      } else if (isUnavail) {
+        reason = 'Entity nicht in HA registriert';
+      } else if (isUnavail && PLACEHOLDER_KEYS[key]) {
+        sym = '–'; cls = 'info-warn'; cntUnavail++;
+        reason = 'Platzhalter — Sensor-Konfiguration erforderlich';
+      } else if (isUnavail && METERING_KEYS[key]) {
         sym = '?'; cls = 'info-warn'; cntUnavail++;
+        reason = 'Metering-Sensor: externer Sensor nicht konfiguriert';
+      } else if (rawState === 'unavailable') {
+        sym = '?'; cls = 'info-warn'; cntUnavail++;
+        reason = 'Entity unavailable';
+      } else if (rawState === 'unknown') {
+        sym = '?'; cls = 'info-warn'; cntUnavail++;
+        reason = 'Entity unknown — noch kein Wert';
       } else {
         sym = '✓'; cls = 'info-ok'; cntOk++;
+        reason = '';
       }
-      var displayVal = rawState !== null ? (rawState + (unit ? ' ' + unit : '')) : 'nicht gefunden';
+
+      var displayVal = rawState !== null ? (rawState + (unit ? ' ' + unit : '')) : '–';
       valCls = isUnavail ? 'info-val unavail' : 'info-val';
+
       var lastChanged = '';
       if (debugMode && stateObj && stateObj.last_changed) {
         try {
           var lc = new Date(stateObj.last_changed);
-          lastChanged = ' <span style="color:#6b7280;font-size:9px;">' + lc.toLocaleTimeString() + '</span>';
+          lastChanged = ' <span style="color:#6b7280;font-size:9px;">∆ ' + lc.toLocaleTimeString() + '</span>';
         } catch (e) { /* ignore */ }
       }
+
       rows += '<div class="info-row">' +
         '<span class="' + cls + '">' + sym + '</span>' +
         '<span class="info-key" title="' + key + '">' + (DISPLAY_NAMES[key] || key) + '</span>' +
         '<span class="info-eid' + (remapped ? ' remapped' : '') + '" title="' + actId + '">' + actId + '</span>' +
-        '<span class="' + valCls + '">' + displayVal + lastChanged + '</span>' +
+        '<span class="' + valCls + '">' + (reason && !rawState ? reason : displayVal + lastChanged) + '</span>' +
       '</div>';
     }
   }
@@ -723,6 +775,10 @@ function buildPageInfo(E, hass, debugMode) {
     '</div>' +
     '<div class="page-sub-hdr">Entities — ✓ gefunden · ? unavailable · ✗ nicht gefunden · <span style="color:#f59e0b;">gelb = remapped</span>' + (debugMode ? ' · Debug-Modus aktiv: letztes Update sichtbar' : '') + '</div>' +
     '<div class="info-entities">' + rows + '</div>' +
+    '<div class="page-note" style="margin-top:0;">' +
+      '<b>Metering-Sensoren</b> (Leistung, Spannung, Strom, Frequenz, Energie) zeigen erst Werte, wenn im Config Flow ein externer Sensor konfiguriert wurde.<br>' +
+      '<b>Wasserqualität</b> (pH, Redox, Temperatur) sind Platzhalter und werden in einer zukünftigen Version konfigurierbar.' +
+    '</div>' +
   '</div>';
 }
 
@@ -738,15 +794,44 @@ class PoolControlCenterCard extends HTMLElement {
     this._page         = 'overview';
     this._settingsOpen = false;
     this._settings     = { poolImage: '', debugMode: false };
+    this._toast        = null;
     this._loadSettings();
     LOG.debug('Card constructed, version:', CARD_VERSION);
   }
 
   set hass(hass) {
+    var oldHass = this._hass;
     this._hass = hass;
     if (!this._E || this._needsResolve()) this._resolveEntities();
-    // Don't re-render while settings modal is open — preserves input focus
-    if (!this._settingsOpen) this._render();
+    // Don't re-render while settings modal is open (preserves input focus)
+    // and skip if no relevant entity state has actually changed (performance)
+    if (!this._settingsOpen && this._hasRelevantChange(oldHass, hass)) {
+      this._render();
+    }
+  }
+
+  _hasRelevantChange(oldHass, newHass) {
+    if (!oldHass || !this._E) return true;
+    var E = this._E;
+    var keys = Object.keys(E);
+    for (var i = 0; i < keys.length; i++) {
+      var id = E[keys[i]];
+      var os = oldHass.states[id];
+      var ns = newHass.states[id];
+      if ((!os) !== (!ns)) return true;
+      if (os && ns && os.state !== ns.state) return true;
+    }
+    return false;
+  }
+
+  _showToast(msg, type) {
+    var self = this;
+    this._toast = { msg: msg, type: type };
+    this._render();
+    setTimeout(function() {
+      self._toast = null;
+      if (!self._settingsOpen) self._render();
+    }, 2800);
   }
 
   _loadSettings() {
@@ -828,11 +913,11 @@ class PoolControlCenterCard extends HTMLElement {
       maintenance:   ['runtime_since_maintenance', 'since_maintenance', 'seit_wartung', 'wartungslaufzeit', 'maintenance'],
       efficiency:    ['efficiency', 'effizienz', 'wirkungsgrad'],
       nextStart:     ['next_start', 'naechster_start', 'next'],
-      power:         ['power', 'leistung', 'watt'],
-      voltage:       ['voltage', 'spannung'],
-      current:       ['current', 'strom', 'ampere'],
-      frequency:     ['frequency', 'frequenz', 'hz'],
-      energy:        ['energy', 'energie', 'verbrauch', 'kwh', 'kWh'],
+      power:         ['metering_power', 'power', 'leistung', 'watt'],
+      voltage:       ['metering_voltage', 'voltage', 'spannung'],
+      current:       ['metering_current', 'current', 'strom', 'ampere'],
+      frequency:     ['metering_frequency', 'frequency', 'frequenz', 'hz'],
+      energy:        ['metering_energy', 'energy', 'energie', 'verbrauch', 'kwh', 'kWh'],
       ph:            ['ph', 'ph_value', 'ph_wert'],
       redox:         ['redox', 'orp'],
       temperature:   ['pool_temperature', 'temperature', 'water_temperature', 'temperatur', 'wassertemperatur', 'pool_temp'],
@@ -919,12 +1004,20 @@ class PoolControlCenterCard extends HTMLElement {
     return !!(s && (s.state === 'on' || s.state === 'true'));
   }
 
-  _svc(domain, service, data) {
+  _svc(domain, service, data, toastLabel) {
     if (!this._hass) { LOG.warn('callService skipped – hass not ready'); return; }
+    var self  = this;
+    var label = toastLabel || (domain + '.' + service);
     LOG.debug('callService:', domain + '.' + service, data);
     var p = this._hass.callService(domain, service, data);
     if (p && typeof p.then === 'function') {
-      p.then(null, function(err) { LOG.warn('Service call FAILED:', domain + '.' + service, err); });
+      p.then(
+        function() { self._showToast('✓ ' + label, 'ok'); },
+        function(err) {
+          LOG.warn('Service call FAILED:', domain + '.' + service, err);
+          self._showToast('✗ ' + label + ' (Fehler)', 'err');
+        }
+      );
     }
   }
 
@@ -944,7 +1037,7 @@ class PoolControlCenterCard extends HTMLElement {
     var eff       = this._val(E.efficiency, '–');
     var runtime   = this._val(E.runtimeToday, '–');
     var remaining = this._val(E.remaining, '–');
-    var nextStart = this._val(E.nextStart, '–');
+    var nextStart = fmtTimestamp(this._val(E.nextStart, '–'));
     var target    = this._val(E.target, '–');
     var ph        = this._val(E.ph, '–');
     var redox     = this._val(E.redox, '–');
@@ -982,6 +1075,17 @@ class PoolControlCenterCard extends HTMLElement {
     var filtSvg  = buildFilterSvg();
     var doserSvg = buildDoserSvg();
 
+    /* ── Warning badge — check critical entity health ── */
+    var CRITICAL_KEYS = ['running', 'status', 'runtimeToday', 'remaining', 'target',
+                         'totalRuntime', 'seasonRuntime', 'maintenance', 'automation'];
+    var missingCnt = 0;
+    for (var ci = 0; ci < CRITICAL_KEYS.length; ci++) {
+      var cid = E[CRITICAL_KEYS[ci]];
+      if (!cid || !this._hass.states[cid]) missingCnt++;
+    }
+    var warnBadge = missingCnt > 0 ?
+      '<div class="warn-badge" id="btn-diag">⚠ ' + missingCnt + ' fehlt</div>' : '';
+
     /* ── Header ── */
     var autoBadgeTitle = autoOn ? 'Automatik aktiv'          : 'Automatik aus';
     var autoBadgeSub   = autoOn ? 'System läuft automatisch' : 'Manueller Betrieb';
@@ -1004,6 +1108,7 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="hbadge no-click hb-muted">' +
           '<div class="hb-text"><div class="hb-title">PPM v' + CARD_VERSION + '</div><div class="hb-sub">Pool Pump Manager</div></div>' +
         '</div>' +
+        warnBadge +
         '<button class="gear-btn' + (this._settingsOpen ? ' open' : '') + '" id="btn-gear" title="Einstellungen">⚙</button>' +
       '</div>' +
     '</div>';
@@ -1223,8 +1328,14 @@ class PoolControlCenterCard extends HTMLElement {
         '</div>';
     }
 
+    /* ── Toast overlay ── */
+    var toastHtml = '';
+    if (this._toast) {
+      toastHtml = '<div class="toast-wrap"><div class="toast ' + this._toast.type + '">' + this._toast.msg + '</div></div>';
+    }
+
     /* ── Assemble ── */
-    var html = '<div class="pcc">' + hdr + body + nav + settingsModal + '</div>';
+    var html = '<div class="pcc">' + hdr + body + nav + settingsModal + toastHtml + '</div>';
     this.shadowRoot.innerHTML = '<style>' + CARD_CSS + '</style>' + html;
     this._attach();
   }
@@ -1246,7 +1357,8 @@ class PoolControlCenterCard extends HTMLElement {
     var toggleAuto = function() {
       var isOn = self._isOn(E.automation);
       LOG.debug('Automatik toggle – aktuell:', isOn ? 'EIN' : 'AUS');
-      self._svc('switch', isOn ? 'turn_off' : 'turn_on', { entity_id: E.automation });
+      self._svc('switch', isOn ? 'turn_off' : 'turn_on', { entity_id: E.automation },
+        isOn ? 'Automatik AUS' : 'Automatik EIN');
     };
 
     var cycleSeason = function() {
@@ -1254,7 +1366,8 @@ class PoolControlCenterCard extends HTMLElement {
       var idx  = SEASON_MODES.indexOf(cur);
       var next = SEASON_MODES[(idx < 0 ? 0 : idx + 1) % SEASON_MODES.length];
       LOG.debug('Saison cycle:', cur, '->', next);
-      self._svc('select', 'select_option', { entity_id: E.seasonMode, option: next });
+      self._svc('select', 'select_option', { entity_id: E.seasonMode, option: next },
+        'Saison: ' + (SEASON_LABEL[next] || next));
     };
 
     var elHdrAuto = $('hdr-auto-badge');
@@ -1270,28 +1383,28 @@ class PoolControlCenterCard extends HTMLElement {
     if (elStart) elStart.addEventListener('click', function() {
       fx(elStart);
       LOG.debug('Start geklickt');
-      self._svc('pool_pump_manager', 'start_now', {});
+      self._svc('pool_pump_manager', 'start_now', {}, 'Pumpe gestartet');
     });
 
     var elStop = $('btn-stop');
     if (elStop) elStop.addEventListener('click', function() {
       fx(elStop);
       LOG.debug('Stop geklickt');
-      self._svc('pool_pump_manager', 'stop_now', {});
+      self._svc('pool_pump_manager', 'stop_now', {}, 'Pumpe gestoppt');
     });
 
     var elMaint = $('btn-maint');
     if (elMaint) elMaint.addEventListener('click', function() {
       fx(elMaint);
       LOG.debug('Wartung Reset geklickt');
-      self._svc('button', 'press', { entity_id: E.btnMaint });
+      self._svc('button', 'press', { entity_id: E.btnMaint }, 'Wartung zurückgesetzt');
     });
 
     var elSeaReset = $('btn-season-reset');
     if (elSeaReset) elSeaReset.addEventListener('click', function() {
       fx(elSeaReset);
       LOG.debug('Saison Reset geklickt');
-      self._svc('button', 'press', { entity_id: E.btnSeason });
+      self._svc('button', 'press', { entity_id: E.btnSeason }, 'Saison zurückgesetzt');
     });
 
     var elSeaCycle = $('btn-season-cycle');
@@ -1310,7 +1423,8 @@ class PoolControlCenterCard extends HTMLElement {
         var opt = this.getAttribute('data-season');
         fx(this);
         LOG.debug('Season direct select:', opt);
-        self._svc('select', 'select_option', { entity_id: E.seasonMode, option: opt });
+        self._svc('select', 'select_option', { entity_id: E.seasonMode, option: opt },
+          'Saison: ' + (SEASON_LABEL[opt] || opt));
       });
     });
 
@@ -1322,6 +1436,13 @@ class PoolControlCenterCard extends HTMLElement {
         self._page = pg;
         self._render();
       });
+    });
+
+    // Warning badge — navigate to Info/Diagnose
+    var elDiag = $('btn-diag');
+    if (elDiag) elDiag.addEventListener('click', function() {
+      self._page = 'info';
+      self._render();
     });
 
     // Gear button — toggle settings modal
