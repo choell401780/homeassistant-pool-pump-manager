@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.5.2
- * Fix runtime entity binding: re-resolve on missing, German suffix map, friendly-name fallback.
+ * Pool Control Center – Custom Lovelace Card v0.5.3
+ * Settings gear modal, pool image via UI, debug mode, page-in animation.
  */
 
-const CARD_VERSION = '0.5.2';
+const CARD_VERSION = '0.5.3';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -62,7 +62,7 @@ const ENTITY_FALLBACKS = {
 const CARD_CSS = '' +
 ':host{display:block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#e6edf3;background:#0d1117;}' +
 '*{box-sizing:border-box;margin:0;padding:0;}' +
-'.pcc{background:#0d1117;border-radius:12px;overflow:hidden;}' +
+'.pcc{background:#0d1117;border-radius:12px;overflow:hidden;position:relative;}' +
 
 /* HEADER */
 '.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:#0d1117;border-bottom:1px solid #21262d;gap:12px;flex-wrap:wrap;}' +
@@ -247,7 +247,47 @@ const CARD_CSS = '' +
 '.info-val.unavail{color:#7d8590;}' +
 
 /* USER POOL IMAGE layer */
-'.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}';
+'.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}' +
+
+/* GEAR BUTTON */
+'.gear-btn{background:transparent;border:1px solid #21262d;color:#7d8590;font-size:18px;cursor:pointer;padding:7px 10px;border-radius:8px;line-height:1;transition:color .2s,background .2s,border-color .2s;position:relative;z-index:10;pointer-events:all;flex-shrink:0;}' +
+'.gear-btn:hover{color:#e6edf3;background:#21262d;border-color:#373e47;}' +
+'.gear-btn.open{color:#22d3ee;border-color:#22d3ee;background:rgba(34,211,238,0.08);}' +
+
+/* SETTINGS MODAL */
+'.settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.78);z-index:200;display:flex;align-items:flex-start;justify-content:flex-end;padding:64px 14px 14px;backdrop-filter:blur(3px);}' +
+'.settings-panel{background:#161b22;border:1px solid #373e47;border-radius:12px;width:310px;max-height:calc(100% - 20px);overflow-y:auto;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.7);animation:modal-in .15s ease;}' +
+'@keyframes modal-in{from{opacity:0;transform:translateY(-8px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);}}' +
+'.settings-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #21262d;flex-shrink:0;}' +
+'.settings-hdr-title{font-size:14px;font-weight:700;color:#e6edf3;}' +
+'.settings-close{background:transparent;border:1px solid transparent;color:#7d8590;font-size:16px;cursor:pointer;padding:4px 7px;line-height:1;border-radius:5px;pointer-events:all;}' +
+'.settings-close:hover{color:#e6edf3;background:#21262d;border-color:#373e47;}' +
+'.settings-section{padding:14px 18px;border-bottom:1px solid #21262d;}' +
+'.settings-section:last-child{border-bottom:none;}' +
+'.settings-section.dim{opacity:0.35;pointer-events:none;}' +
+'.settings-stitle{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#7d8590;margin-bottom:10px;display:flex;align-items:center;gap:8px;}' +
+'.settings-soon{font-size:9px;background:#21262d;color:#6b7280;padding:1px 5px;border-radius:3px;letter-spacing:0;text-transform:none;font-weight:500;}' +
+'.settings-note{font-size:11px;color:#7d8590;margin-bottom:10px;line-height:1.55;}' +
+'.settings-note code{background:#0d1117;padding:1px 5px;border-radius:3px;font-size:10px;color:#22d3ee;font-family:monospace;}' +
+'.settings-img-preview{width:100%;height:56px;border-radius:6px;background:#0d1117;border:1px solid #21262d;background-size:cover;background-position:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#7d8590;}' +
+'.settings-input{width:100%;background:#0d1117;border:1px solid #21262d;border-radius:6px;color:#e6edf3;font-size:12px;padding:7px 10px;font-family:monospace;box-sizing:border-box;margin-bottom:8px;}' +
+'.settings-input:focus{outline:none;border-color:#22d3ee;}' +
+'.settings-btns{display:flex;gap:8px;}' +
+'.settings-btn{padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:#22d3ee;color:#0d1117;transition:background .2s;pointer-events:all;}' +
+'.settings-btn:hover{background:#67e8f9;}' +
+'.settings-btn.sec{background:#21262d;color:#e6edf3;border:1px solid #373e47;}' +
+'.settings-btn.sec:hover{background:#373e47;}' +
+'.settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}' +
+'.settings-row-lbl{font-size:12px;color:#e6edf3;font-weight:500;}' +
+'.settings-row-sub{font-size:10px;color:#7d8590;margin-top:2px;}' +
+
+/* PAGE-IN ANIMATION */
+'@keyframes page-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}' +
+'.page-body{animation:page-in .18s ease;}' +
+
+/* NAV ACTIVE INDICATOR */
+'.nav-btn{position:relative;}' +
+'.nav-btn.active::after{content:"";position:absolute;bottom:0;left:22%;right:22%;height:2px;background:#22d3ee;border-radius:2px 2px 0 0;}';
 
 // ── Pool Hero (CSS layered divs – no SVG landscape) ───────────────────────────
 
@@ -601,7 +641,7 @@ function buildPageHistory() {
   '</div>';
 }
 
-function buildPageInfo(E, hass) {
+function buildPageInfo(E, hass, debugMode) {
   var DISPLAY_NAMES = {
     automation:    'Automatik',
     running:       'Pumpe läuft',
@@ -653,11 +693,18 @@ function buildPageInfo(E, hass) {
       }
       var displayVal = rawState !== null ? (rawState + (unit ? ' ' + unit : '')) : 'nicht gefunden';
       valCls = isUnavail ? 'info-val unavail' : 'info-val';
+      var lastChanged = '';
+      if (debugMode && stateObj && stateObj.last_changed) {
+        try {
+          var lc = new Date(stateObj.last_changed);
+          lastChanged = ' <span style="color:#6b7280;font-size:9px;">' + lc.toLocaleTimeString() + '</span>';
+        } catch (e) { /* ignore */ }
+      }
       rows += '<div class="info-row">' +
         '<span class="' + cls + '">' + sym + '</span>' +
         '<span class="info-key" title="' + key + '">' + (DISPLAY_NAMES[key] || key) + '</span>' +
         '<span class="info-eid' + (remapped ? ' remapped' : '') + '" title="' + actId + '">' + actId + '</span>' +
-        '<span class="' + valCls + '">' + displayVal + '</span>' +
+        '<span class="' + valCls + '">' + displayVal + lastChanged + '</span>' +
       '</div>';
     }
   }
@@ -674,7 +721,7 @@ function buildPageInfo(E, hass) {
       '</span></div>' +
       '<div class="info-kv"><span class="info-kv-k">Repository</span><span class="info-kv-v"><a class="info-link" href="https://github.com/choell401780/homeassistant-pool-pump-manager" target="_blank">GitHub ↗</a></span></div>' +
     '</div>' +
-    '<div class="page-sub-hdr">Entities — ✓ gefunden · ? unavailable · ✗ nicht gefunden · <span style="color:#f59e0b;">gelb = ID remapped</span></div>' +
+    '<div class="page-sub-hdr">Entities — ✓ gefunden · ? unavailable · ✗ nicht gefunden · <span style="color:#f59e0b;">gelb = remapped</span>' + (debugMode ? ' · Debug-Modus aktiv: letztes Update sichtbar' : '') + '</div>' +
     '<div class="info-entities">' + rows + '</div>' +
   '</div>';
 }
@@ -685,17 +732,38 @@ class PoolControlCenterCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass = null;
-    this._E    = null;
-    this._cfg  = {};
-    this._page = 'overview';
+    this._hass         = null;
+    this._E            = null;
+    this._cfg          = {};
+    this._page         = 'overview';
+    this._settingsOpen = false;
+    this._settings     = { poolImage: '', debugMode: false };
+    this._loadSettings();
     LOG.debug('Card constructed, version:', CARD_VERSION);
   }
 
   set hass(hass) {
     this._hass = hass;
     if (!this._E || this._needsResolve()) this._resolveEntities();
-    this._render();
+    // Don't re-render while settings modal is open — preserves input focus
+    if (!this._settingsOpen) this._render();
+  }
+
+  _loadSettings() {
+    try {
+      var raw = window.localStorage.getItem('pcc-v1-settings');
+      if (raw) {
+        var p = JSON.parse(raw);
+        this._settings.poolImage  = p.poolImage  || '';
+        this._settings.debugMode  = !!p.debugMode;
+      }
+    } catch (e) { LOG.debug('Settings load failed:', e); }
+  }
+
+  _saveSettings() {
+    try {
+      window.localStorage.setItem('pcc-v1-settings', JSON.stringify(this._settings));
+    } catch (e) { LOG.debug('Settings save failed:', e); }
   }
 
   _needsResolve() {
@@ -906,7 +974,9 @@ class PoolControlCenterCard extends HTMLElement {
     }
 
     /* Build visuals */
-    var imgUrl   = (this._cfg && this._cfg.pool_image) ? this._cfg.pool_image : '/local/pool-pump-manager/pool-background.jpg';
+    var imgUrl = this._settings.poolImage ||
+                 (this._cfg && this._cfg.pool_image) ||
+                 '/local/pool-pump-manager/pool-background.jpg';
     var poolHero = buildPoolHero(running, imgUrl);
     var pumpSvg  = buildPumpSvg(running);
     var filtSvg  = buildFilterSvg();
@@ -934,6 +1004,7 @@ class PoolControlCenterCard extends HTMLElement {
         '<div class="hbadge no-click hb-muted">' +
           '<div class="hb-text"><div class="hb-title">PPM v' + CARD_VERSION + '</div><div class="hb-sub">Pool Pump Manager</div></div>' +
         '</div>' +
+        '<button class="gear-btn' + (this._settingsOpen ? ' open' : '') + '" id="btn-gear" title="Einstellungen">⚙</button>' +
       '</div>' +
     '</div>';
 
@@ -1104,13 +1175,56 @@ class PoolControlCenterCard extends HTMLElement {
     } else if (page === 'history') {
       body = buildPageHistory();
     } else if (page === 'info') {
-      body = buildPageInfo(this._E, this._hass);
+      body = buildPageInfo(this._E, this._hass, this._settings.debugMode);
     } else {
       body = mainArea + statBar + bottom;
     }
 
+    /* ── Settings Modal ── */
+    var settingsModal = '';
+    if (this._settingsOpen) {
+      var curImg    = this._settings.poolImage || (this._cfg && this._cfg.pool_image) || '';
+      var debugOn   = this._settings.debugMode;
+      var dTogCls   = debugOn ? 'on' : 'off';
+      var dTogLbl   = debugOn ? 'EIN' : 'AUS';
+      var prevStyle = curImg ? 'background-image:url(\'' + curImg.replace(/'/g, '%27') + '\')' : '';
+      var prevTxt   = curImg ? '' : 'Kein Bild gewählt';
+      settingsModal =
+        '<div class="settings-overlay" id="settings-overlay">' +
+          '<div class="settings-panel" id="settings-panel">' +
+            '<div class="settings-hdr">' +
+              '<span class="settings-hdr-title">⚙ Einstellungen</span>' +
+              '<button class="settings-close" id="settings-close">✕</button>' +
+            '</div>' +
+            '<div class="settings-section">' +
+              '<div class="settings-stitle">Pool-Hintergrundbild</div>' +
+              '<div class="settings-note">URL zu einem über HA erreichbaren Bild.<br>Beispiel: <code>/local/pool.jpg</code><br>Leer lassen = automatische CSS-Ansicht.</div>' +
+              '<div class="settings-img-preview" style="' + prevStyle + '">' + prevTxt + '</div>' +
+              '<input class="settings-input" id="settings-img-input" type="text" placeholder="/local/pool-pump-manager/pool-background.jpg" value="' + curImg.replace(/"/g, '&#34;') + '">' +
+              '<div class="settings-btns">' +
+                '<button class="settings-btn" id="settings-img-apply">Übernehmen</button>' +
+                '<button class="settings-btn sec" id="settings-img-clear">Zurücksetzen</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-section">' +
+              '<div class="settings-stitle">Debug-Modus</div>' +
+              '<div class="settings-row">' +
+                '<div><div class="settings-row-lbl">Erweiterte Diagnose</div><div class="settings-row-sub">Zeigt Entity-Details auf der Info-Seite</div></div>' +
+                '<div class="ctrl-toggle-wrap">' +
+                  '<span class="ctrl-toggle-lbl ' + dTogCls + '">' + dTogLbl + '</span>' +
+                  '<button class="toggle-pill ' + dTogCls + '" id="settings-debug-toggle"></button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-section dim"><div class="settings-stitle">Theme <span class="settings-soon">demnächst</span></div></div>' +
+            '<div class="settings-section dim"><div class="settings-stitle">Animationen <span class="settings-soon">demnächst</span></div></div>' +
+            '<div class="settings-section dim"><div class="settings-stitle">Akzentfarbe <span class="settings-soon">demnächst</span></div></div>' +
+          '</div>' +
+        '</div>';
+    }
+
     /* ── Assemble ── */
-    var html = '<div class="pcc">' + hdr + body + nav + '</div>';
+    var html = '<div class="pcc">' + hdr + body + nav + settingsModal + '</div>';
     this.shadowRoot.innerHTML = '<style>' + CARD_CSS + '</style>' + html;
     this._attach();
   }
@@ -1208,6 +1322,61 @@ class PoolControlCenterCard extends HTMLElement {
         self._page = pg;
         self._render();
       });
+    });
+
+    // Gear button — toggle settings modal
+    var elGear = $('btn-gear');
+    if (elGear) elGear.addEventListener('click', function() {
+      self._settingsOpen = !self._settingsOpen;
+      self._render();
+    });
+
+    // Settings modal — close button
+    var elSettingsClose = $('settings-close');
+    if (elSettingsClose) elSettingsClose.addEventListener('click', function() {
+      self._settingsOpen = false;
+      self._render();
+    });
+
+    // Settings modal — click outside panel closes it
+    var elOverlay = $('settings-overlay');
+    if (elOverlay) elOverlay.addEventListener('click', function(e) {
+      var panel = $('settings-panel');
+      if (panel && !panel.contains(e.target)) {
+        self._settingsOpen = false;
+        self._render();
+      }
+    });
+
+    // Settings modal — apply image URL
+    var elImgApply = $('settings-img-apply');
+    if (elImgApply) elImgApply.addEventListener('click', function() {
+      var inp = $('settings-img-input');
+      var val = inp ? inp.value.trim() : '';
+      self._settings.poolImage = val;
+      self._saveSettings();
+      self._settingsOpen = false;
+      LOG.debug('Pool image set to:', val || '(default fallback)');
+      self._render();
+    });
+
+    // Settings modal — clear image (back to CSS default)
+    var elImgClear = $('settings-img-clear');
+    if (elImgClear) elImgClear.addEventListener('click', function() {
+      self._settings.poolImage = '';
+      self._saveSettings();
+      self._settingsOpen = false;
+      LOG.debug('Pool image cleared — using CSS fallback');
+      self._render();
+    });
+
+    // Settings modal — debug toggle
+    var elDebugToggle = $('settings-debug-toggle');
+    if (elDebugToggle) elDebugToggle.addEventListener('click', function() {
+      self._settings.debugMode = !self._settings.debugMode;
+      self._saveSettings();
+      LOG.debug('Debug mode:', self._settings.debugMode ? 'ON' : 'OFF');
+      self._render();
     });
   }
 }

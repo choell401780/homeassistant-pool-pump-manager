@@ -336,6 +336,17 @@ Die Datei [`lovelace-example.yaml`](lovelace-example.yaml) enthält ein fertiges
 
 ## Changelog
 
+### v0.5.3
+
+- **Einstellungen-Zahnrad (⚙)** oben rechts im Header — öffnet modales Panel mit Animation
+- **Poolbild per UI konfigurieren** — keine Dateien mehr kopieren nötig: Zahnrad → URL eingeben → Übernehmen; Wert wird in `localStorage` gespeichert und überlebt Page-Reloads; leer lassen = CSS-Fallback
+- **Debug-Modus** — Toggle im Einstellungs-Panel; aktiviert `last_changed`-Zeitstempel je Entity auf der Info-Seite
+- **Architektur-Slots** vorbereitet: Theme, Animationen, Akzentfarbe (grau = demnächst)
+- **Page-in-Animation** — sanfte Einblendung beim Tab-Wechsel (`0.18s ease`)
+- **Nav-Aktivindikator** — 2 px Linie unter aktivem Tab
+- **Settings re-render blockiert** — während das Settings-Modal offen ist, werden keine HA-State-Updates neu gerendert (verhindert Reset des URL-Inputs)
+- **Pool-Image-Priorität**: `localStorage` (User) → `pool_image` (HA Config) → CSS-Fallback
+
 ### v0.5.2
 
 - **Fix: Laufzeitwerte leer** — `_resolveEntities()` läuft jetzt nach jeder HA-Aktualisierung erneut, solange kritische Entities fehlen oder `unavailable` sind (statt nur einmal beim Start)
