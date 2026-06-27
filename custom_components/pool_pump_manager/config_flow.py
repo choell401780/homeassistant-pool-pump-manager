@@ -316,12 +316,23 @@ class PoolPumpManagerOptionsFlow(OptionsFlow):
     """Handle options for Pool Pump Manager (pool params + sensor assignments)."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
+        super().__init__()  # required: FlowHandler.__init__ sets internal flow state
         self._entry = config_entry
         self._pool_data: dict[str, Any] = {}
 
     def _current(self) -> dict[str, Any]:
-        """Merged current config (options override data)."""
-        return {**self._entry.data, **self._entry.options}
+        """Merged current config (options override data), with safe defaults for old entries."""
+        merged = {**self._entry.data, **self._entry.options}
+        # Guarantee all expected keys exist so schema builders never KeyError or use wrong type
+        merged.setdefault(CONF_POOL_VOLUME, DEFAULT_POOL_VOLUME)
+        merged.setdefault(CONF_PUMP_FLOW_RATE, DEFAULT_PUMP_FLOW_RATE)
+        merged.setdefault(CONF_WATER_TEMP, DEFAULT_WATER_TEMP)
+        merged.setdefault(CONF_CIRCULATIONS_PER_DAY, DEFAULT_CIRCULATIONS)
+        merged.setdefault(CONF_START_TIME, DEFAULT_START_TIME)
+        merged.setdefault(CONF_END_TIME, DEFAULT_END_TIME)
+        for key in ALL_METERING_CONFS:
+            merged.setdefault(key, None)
+        return merged
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
