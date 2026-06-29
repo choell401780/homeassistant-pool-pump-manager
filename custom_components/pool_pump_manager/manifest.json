@@ -1,7 +1,7 @@
 {
   "domain": "pool_pump_manager",
   "name": "Pool Pump Manager",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "documentation": "https://github.com/choell401780/homeassistant-pool-pump-manager",
   "issue_tracker": "https://github.com/choell401780/homeassistant-pool-pump-manager/issues",
   "dependencies": [],

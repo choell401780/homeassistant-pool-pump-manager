@@ -1,11 +1,12 @@
 'use strict';
 
 /**
- * Pool Control Center – Custom Lovelace Card v0.6.0
- * Fix metering entity IDs, toast feedback, warning badge, timestamp formatting.
+ * Pool Control Center – Custom Lovelace Card v0.6.2
+ * Optimistic UI, improved pump animation, runtime charts, 4-button nav,
+ * diagnostics in gear modal, pool image file picker.
  */
 
-const CARD_VERSION = '0.6.0';
+const CARD_VERSION = '0.6.2';
 
 const LOG = {
   info:  function() { var a = ['%c[PCC]%c', 'color:#22d3ee;font-weight:700', '']; for (var i=0;i<arguments.length;i++) a.push(arguments[i]); console.info.apply(console, a); },
@@ -15,7 +16,7 @@ const LOG = {
 
 const SEASON_MODES = ['auto', 'spring', 'summer', 'autumn', 'winter'];
 const SEASON_LABEL = { auto: 'Auto', spring: 'Frühling', summer: 'Sommer', autumn: 'Herbst', winter: 'Winter' };
-const SEASON_ICON  = { auto: '⚙️', spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️' };
+const SEASON_ICON  = { auto: '⚙️', spring: '\U0001f338', summer: '☀️', autumn: '\U0001f342', winter: '❄️' };
 
 const STATUS_LABEL = {
   running: 'Läuft', waiting: 'Warten', scheduled: 'Geplant',
@@ -83,6 +84,17 @@ const CARD_CSS = '' +
 '.hb-sub{font-size:11px;color:#7d8590;line-height:1.3;}' +
 '.hb-muted .hb-title{color:#7d8590;}' +
 
+/* STATUS RUN BADGE */
+'.srb{display:flex;align-items:center;gap:8px;padding:10px 16px;background:#161b22;border:1px solid #21262d;border-radius:8px;cursor:pointer;white-space:nowrap;}' +
+'.srb:hover{border-color:#373e47;background:#1c2128;}' +
+'.srb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}' +
+'.srb-dot.run{background:#22c55e;animation:pulse-green 2s infinite;}' +
+'.srb-dot.stop{background:#6b7280;}' +
+'.srb-text{font-size:13px;font-weight:600;line-height:1.3;}' +
+'.srb-text.run{color:#22c55e;}' +
+'.srb-text.stop{color:#6b7280;}' +
+'.srb-sub{font-size:11px;color:#7d8590;line-height:1.3;}' +
+
 /* MAIN AREA */
 '.main-area{display:flex;height:340px;border-bottom:1px solid #21262d;overflow:hidden;}' +
 '.pool-area{flex:0 0 60%;overflow:hidden;position:relative;background:#040810;}' +
@@ -105,8 +117,11 @@ const CARD_CSS = '' +
 /* PUMP ANIMATION */
 '@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg)}}' +
 '.pump-ring-run{transform-origin:88px 50px;transform-box:fill-box;animation:spin 2s linear infinite;}' +
+'.pump-rotor-run{transform-origin:44px 50px;transform-box:fill-box;animation:spin 1.2s linear infinite;}' +
+'@keyframes pulse-ring{0%,100%{opacity:0.25;}50%{opacity:0.6;}}' +
+'.pump-status-ring-run{animation:pulse-ring 2s ease-in-out infinite;}' +
 
-/* POOL HERO – CSS layered divs */
+/* POOL HERO */
 '.pool-hero{position:relative;width:100%;height:100%;overflow:hidden;background:#040810;}' +
 '.pool-hero>*{position:absolute;}' +
 '.ph-sky{inset:0;}' +
@@ -123,6 +138,7 @@ const CARD_CSS = '' +
 '@keyframes pool-ripple{0%{transform:translate(-50%,-50%) scale(0.3);opacity:0.7;}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0;}}' +
 '.ph-ripple{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40%;height:55%;border-radius:50%;border:1.5px solid rgba(0,229,255,0.45);animation:pool-ripple 3s ease-out infinite;pointer-events:none;}' +
 '.ph-ripple-2{animation-delay:1.5s;}' +
+'.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}' +
 
 /* STATUS BAR */
 '.stat-bar{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid #21262d;}' +
@@ -176,9 +192,9 @@ const CARD_CSS = '' +
 '.toggle-pill.on::after{left:23px;}' +
 '.toggle-pill.off::after{left:3px;}' +
 '.ctrl-main-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
-'.btn-start{background:#16a34a;color:white;border:none;border-radius:8px;padding:11px 8px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .2s;position:relative;z-index:10;pointer-events:all;}' +
+'.btn-start{background:#16a34a;color:white;border:none;border-radius:8px;padding:11px 8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .2s;position:relative;z-index:10;pointer-events:all;}' +
 '.btn-start:hover{background:#15803d;}' +
-'.btn-stop{background:#dc2626;color:white;border:none;border-radius:8px;padding:11px 8px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .2s;position:relative;z-index:10;pointer-events:all;}' +
+'.btn-stop{background:#dc2626;color:white;border:none;border-radius:8px;padding:11px 8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .2s;position:relative;z-index:10;pointer-events:all;}' +
 '.btn-stop:hover{background:#b91c1c;}' +
 '.ctrl-reset-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
 '.btn-reset{background:transparent;color:#e6edf3;border:1px solid #21262d;border-radius:7px;padding:7px 4px;font-size:11px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .2s,border-color .2s;position:relative;z-index:10;pointer-events:all;}' +
@@ -201,9 +217,12 @@ const CARD_CSS = '' +
 '.nav-btn:hover:not(.active){color:#e6edf3;background:#0f1419;}' +
 '.nav-ico{font-size:17px;}' +
 '.nav-lbl{font-size:10px;font-weight:500;}' +
+'.nav-btn{position:relative;}' +
+'.nav-btn.active::after{content:"";position:absolute;bottom:0;left:22%;right:22%;height:2px;background:#22d3ee;border-radius:2px 2px 0 0;}' +
 
 /* PAGE CONTENT */
-'.page-body{padding:20px;display:flex;flex-direction:column;gap:14px;}' +
+'@keyframes page-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}' +
+'.page-body{padding:20px;display:flex;flex-direction:column;gap:14px;animation:page-in .18s ease;}' +
 '.page-hdr{font-size:11px;font-weight:700;letter-spacing:0.15em;color:#7d8590;text-transform:uppercase;padding-bottom:10px;border-bottom:1px solid #21262d;}' +
 '.page-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}' +
 '.page-card{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;}' +
@@ -211,8 +230,34 @@ const CARD_CSS = '' +
 '.pc-val{font-size:22px;font-weight:700;color:#e6edf3;line-height:1.2;}' +
 '.pc-sub{font-size:11px;color:#7d8590;word-break:break-all;font-family:monospace;}' +
 '.page-note{font-size:12px;color:#7d8590;background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px 14px;line-height:1.6;}' +
-'.page-note code,.info-id{background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#22d3ee;font-family:monospace;}' +
+'.page-note code{background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#22d3ee;font-family:monospace;}' +
 '.page-sub-hdr{font-size:10px;font-weight:700;letter-spacing:0.1em;color:#7d8590;text-transform:uppercase;margin-top:4px;}' +
+
+/* RUNTIMES PAGE */
+'.rt-section{display:flex;flex-direction:column;gap:8px;}' +
+'.rt-sec-title{font-size:10px;font-weight:700;letter-spacing:0.1em;color:#22d3ee;text-transform:uppercase;}' +
+'.rt-today-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}' +
+'.rt-today-stat{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:10px 12px;}' +
+'.rt-today-lbl{font-size:10px;color:#7d8590;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}' +
+'.rt-today-val{font-size:18px;font-weight:700;color:#e6edf3;line-height:1.2;}' +
+'.rt-today-bar-wrap{background:#21262d;border-radius:8px;height:24px;width:100%;overflow:hidden;}' +
+'.rt-today-bar-fill{height:100%;background:linear-gradient(90deg,#22c55e,#16a34a);border-radius:8px;transition:width .5s;display:flex;align-items:center;padding-left:10px;min-width:32px;}' +
+'.rt-today-bar-pct{font-size:11px;font-weight:700;color:white;white-space:nowrap;}' +
+'.rt-today-bar-labels{display:flex;justify-content:space-between;font-size:10px;color:#7d8590;margin-top:3px;}' +
+
+'.rt-week-grid{display:flex;gap:6px;align-items:stretch;height:100px;}' +
+'.rt-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;}' +
+'.rt-bar-val{font-size:9px;color:#7d8590;height:16px;display:flex;align-items:center;}' +
+'.rt-bar-outer{flex:1;width:100%;background:#21262d;border-radius:4px 4px 0 0;position:relative;min-height:4px;}' +
+'.rt-bar-inner{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,#22c55e,#16a34a);border-radius:4px 4px 0 0;transition:height .5s;}' +
+'.rt-bar-inner.today{background:linear-gradient(180deg,#22d3ee,#0891b2);}' +
+'.rt-bar-day{font-size:10px;font-weight:600;color:#7d8590;height:16px;display:flex;align-items:center;}' +
+'.rt-bar-day.today{color:#22d3ee;font-weight:700;}' +
+
+'.rt-month-grid{display:flex;gap:2px;align-items:flex-end;height:40px;margin-top:4px;}' +
+'.rt-month-bar{flex:1;border-radius:2px 2px 0 0;background:#21262d;min-height:2px;}' +
+'.rt-month-bar.filled{background:#22c55e;}' +
+'.rt-month-bar.today{background:#22d3ee;}' +
 
 /* SETTINGS PAGE */
 '.set-section{display:flex;flex-direction:column;gap:8px;}' +
@@ -227,27 +272,6 @@ const CARD_CSS = '' +
 '.maint-row{display:flex;gap:12px;margin-top:4px;}' +
 '.btn-maint-lg{flex:1;padding:14px;background:transparent;border:1px solid #21262d;border-radius:8px;color:#e6edf3;font-size:13px;font-weight:500;cursor:pointer;transition:background .2s,border-color .2s;display:flex;align-items:center;justify-content:center;gap:6px;position:relative;z-index:10;pointer-events:all;}' +
 '.btn-maint-lg:hover{background:#21262d;border-color:#373e47;}' +
-
-/* INFO PAGE */
-'.info-block{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:0 14px;}' +
-'.info-kv{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #21262d;font-size:12px;}' +
-'.info-kv:last-child{border-bottom:none;}' +
-'.info-kv-k{color:#7d8590;}' +
-'.info-kv-v{color:#e6edf3;font-weight:500;}' +
-'.info-link{color:#22d3ee;text-decoration:none;}' +
-'.info-entities{display:flex;flex-direction:column;gap:3px;max-height:260px;overflow-y:auto;}' +
-'.info-row{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;background:#161b22;border:1px solid #21262d;}' +
-'.info-ok{color:#22c55e;font-size:13px;width:14px;flex-shrink:0;}' +
-'.info-warn{color:#f59e0b;font-size:13px;width:14px;flex-shrink:0;}' +
-'.info-miss{color:#ef4444;font-size:13px;width:14px;flex-shrink:0;}' +
-'.info-key{font-size:11px;color:#7d8590;min-width:90px;max-width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
-'.info-eid{font-size:10px;color:#22d3ee;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}' +
-'.info-eid.remapped{color:#f59e0b;}' +
-'.info-val{color:#e6edf3;font-weight:600;min-width:60px;text-align:right;font-size:11px;white-space:nowrap;}' +
-'.info-val.unavail{color:#7d8590;}' +
-
-/* USER POOL IMAGE layer */
-'.ph-user-img{z-index:20;background-size:cover;background-position:center;pointer-events:none;}' +
 
 /* TOAST NOTIFICATIONS */
 '.toast-wrap{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:400;pointer-events:none;white-space:nowrap;}' +
@@ -267,7 +291,7 @@ const CARD_CSS = '' +
 
 /* SETTINGS MODAL */
 '.settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.78);z-index:200;display:flex;align-items:flex-start;justify-content:flex-end;padding:64px 14px 14px;backdrop-filter:blur(3px);}' +
-'.settings-panel{background:#161b22;border:1px solid #373e47;border-radius:12px;width:310px;max-height:calc(100% - 20px);overflow-y:auto;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.7);animation:modal-in .15s ease;}' +
+'.settings-panel{background:#161b22;border:1px solid #373e47;border-radius:12px;width:320px;max-height:calc(100% - 20px);overflow-y:auto;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.7);animation:modal-in .15s ease;}' +
 '@keyframes modal-in{from{opacity:0;transform:translateY(-8px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);}}' +
 '.settings-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #21262d;flex-shrink:0;}' +
 '.settings-hdr-title{font-size:14px;font-weight:700;color:#e6edf3;}' +
@@ -275,12 +299,12 @@ const CARD_CSS = '' +
 '.settings-close:hover{color:#e6edf3;background:#21262d;border-color:#373e47;}' +
 '.settings-section{padding:14px 18px;border-bottom:1px solid #21262d;}' +
 '.settings-section:last-child{border-bottom:none;}' +
-'.settings-section.dim{opacity:0.35;pointer-events:none;}' +
 '.settings-stitle{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#7d8590;margin-bottom:10px;display:flex;align-items:center;gap:8px;}' +
-'.settings-soon{font-size:9px;background:#21262d;color:#6b7280;padding:1px 5px;border-radius:3px;letter-spacing:0;text-transform:none;font-weight:500;}' +
 '.settings-note{font-size:11px;color:#7d8590;margin-bottom:10px;line-height:1.55;}' +
 '.settings-note code{background:#0d1117;padding:1px 5px;border-radius:3px;font-size:10px;color:#22d3ee;font-family:monospace;}' +
 '.settings-img-preview{width:100%;height:56px;border-radius:6px;background:#0d1117;border:1px solid #21262d;background-size:cover;background-position:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#7d8590;}' +
+'.file-pick-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 12px;background:#21262d;border:1px solid #373e47;border-radius:6px;color:#e6edf3;font-size:12px;font-weight:500;cursor:pointer;margin-bottom:8px;pointer-events:all;}' +
+'.file-pick-btn:hover{background:#373e47;}' +
 '.settings-input{width:100%;background:#0d1117;border:1px solid #21262d;border-radius:6px;color:#e6edf3;font-size:12px;padding:7px 10px;font-family:monospace;box-sizing:border-box;margin-bottom:8px;}' +
 '.settings-input:focus{outline:none;border-color:#22d3ee;}' +
 '.settings-btns{display:flex;gap:8px;}' +
@@ -292,15 +316,22 @@ const CARD_CSS = '' +
 '.settings-row-lbl{font-size:12px;color:#e6edf3;font-weight:500;}' +
 '.settings-row-sub{font-size:10px;color:#7d8590;margin-top:2px;}' +
 
-/* PAGE-IN ANIMATION */
-'@keyframes page-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}' +
-'.page-body{animation:page-in .18s ease;}' +
+/* DIAGNOSTICS IN MODAL */
+'.diag-entities{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;margin-top:8px;}' +
+'.diag-row{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;background:#0d1117;font-size:10px;}' +
+'.diag-sym{width:12px;text-align:center;flex-shrink:0;font-size:11px;}' +
+'.diag-sym.ok{color:#22c55e;}' +
+'.diag-sym.warn{color:#f59e0b;}' +
+'.diag-sym.miss{color:#ef4444;}' +
+'.diag-key{color:#7d8590;min-width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+'.diag-val{color:#e6edf3;font-weight:500;margin-left:auto;white-space:nowrap;}' +
+'.diag-val.unavail{color:#6b7280;}' +
+'.diag-summary{font-size:11px;color:#7d8590;margin-bottom:6px;}' +
+'.diag-summary span.ok{color:#22c55e;}' +
+'.diag-summary span.warn{color:#f59e0b;}' +
+'.diag-summary span.miss{color:#ef4444;}';
 
-/* NAV ACTIVE INDICATOR */
-'.nav-btn{position:relative;}' +
-'.nav-btn.active::after{content:"";position:absolute;bottom:0;left:22%;right:22%;height:2px;background:#22d3ee;border-radius:2px 2px 0 0;}';
-
-// ── Pool Hero (CSS layered divs – no SVG landscape) ───────────────────────────
+// ── Pool Hero ─────────────────────────────────────────────────────────────────
 
 function buildPoolHero(running, imgUrl) {
   var ripples = running ?
@@ -308,119 +339,37 @@ function buildPoolHero(running, imgUrl) {
   var userImgLayer = imgUrl ?
     '<div class="ph-user-img" style="inset:0;background-image:url(\'' + imgUrl + '\');"></div>' : '';
 
-  return '' +
-    '<div class="pool-hero">' +
-
-      /* Layer 1: sky + distant foliage colour suggestion */
-      '<div class="ph-sky" style="' +
-        'background:' +
-          'radial-gradient(ellipse 130% 55% at 50% -5%, #0b230a 0%, transparent 55%),' +
-          'radial-gradient(ellipse 55% 60% at 3% 25%, #061406 0%, transparent 45%),' +
-          'radial-gradient(ellipse 45% 50% at 97% 25%, #061406 0%, transparent 45%),' +
-          'linear-gradient(to bottom, #040810 0%, #0a1520 100%);' +
-        'filter:blur(3px);' +
-      '"></div>' +
-
-      /* Layer 2: dense foliage mass (blurred radial blobs, no drawn shapes) */
-      '<div class="ph-foliage" style="' +
-        'background:' +
-          'radial-gradient(ellipse 40% 80% at 8% 85%, rgba(4,16,4,0.95) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 30% 70% at 22% 90%, rgba(7,22,7,0.9) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 35% 75% at 38% 88%, rgba(5,18,5,0.92) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 40% 80% at 55% 90%, rgba(6,20,6,0.9) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 30% 70% at 72% 85%, rgba(7,22,7,0.88) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 35% 75% at 88% 88%, rgba(5,18,5,0.9) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 25% 60% at 95% 80%, rgba(4,14,4,0.92) 0%, transparent 100%);' +
-        'filter:blur(5px);' +
-      '"></div>' +
-
-      /* Layer 3: wooden deck with planks via repeating gradient */
-      '<div class="ph-deck" style="' +
-        'background:' +
-          'repeating-linear-gradient(0deg,transparent 0px,transparent 11px,rgba(0,0,0,0.28) 11px,rgba(0,0,0,0.28) 12px),' +
-          'repeating-linear-gradient(90deg,transparent 0px,transparent 120px,rgba(0,0,0,0.05) 120px,rgba(0,0,0,0.05) 121px),' +
-          'linear-gradient(to bottom, #4e3014 0%, #3d2510 35%, #2e1b0a 75%, #201208 100%);' +
-      '"></div>' +
-
-      /* Layer 4: amber ground uplights */
-      '<div class="ph-lamps" style="' +
-        'background:' +
-          'radial-gradient(ellipse 7% 5% at 13% 82%, rgba(255,140,30,0.55) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 7% 5% at 25% 90%, rgba(255,130,20,0.5) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 8% 5% at 38% 94%, rgba(255,135,25,0.45) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 7% 5% at 51% 93%, rgba(255,130,20,0.45) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 7% 5% at 64% 90%, rgba(255,140,30,0.5) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 7% 5% at 77% 83%, rgba(255,135,25,0.5) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 6% 4% at 88% 78%, rgba(255,140,30,0.45) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 5% 4% at 12% 70%, rgba(255,120,15,0.35) 0%, transparent 100%),' +
-          'radial-gradient(ellipse 5% 4% at 89% 68%, rgba(255,120,15,0.35) 0%, transparent 100%);' +
-      '"></div>' +
-
-      /* Layer 5: pool outer cyan glow on deck */
-      '<div class="ph-pool-glow" style="' +
-        'left:14%;right:11%;top:38%;bottom:10%;' +
-        'box-shadow:0 0 60px 30px rgba(0,200,255,0.15),0 0 120px 60px rgba(0,150,200,0.08);' +
-      '"></div>' +
-
-      /* Layer 6: pool rim/coping */
-      '<div class="ph-pool-rim" style="' +
-        'left:14%;right:11%;top:38%;bottom:10%;' +
-        'border:3px solid rgba(160,185,210,0.45);' +
-        'box-shadow:inset 0 0 20px rgba(0,50,100,0.5);' +
-      '"></div>' +
-
-      /* Layer 7: pool water with underwater light spots and ripples inside */
-      '<div class="ph-pool-water" style="' +
-        'left:14.5%;right:11.5%;top:38.5%;bottom:10.5%;' +
-        'background:radial-gradient(ellipse at 42% 32%, #00e8ff 0%, #00c8e8 12%, #00a0c8 30%, #0077b6 58%, #024e9a 80%, #02307a 100%);' +
-      '">' +
-        /* Underwater light spots */
-        '<div class="ph-uwl" style="left:18%;top:25%;width:32%;height:50%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.75) 0%,rgba(100,250,255,0.35) 35%,transparent 70%);"></div>' +
-        '<div class="ph-uwl" style="left:40%;top:18%;width:28%;height:45%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.65) 0%,rgba(80,240,255,0.3) 30%,transparent 65%);"></div>' +
-        '<div class="ph-uwl" style="left:62%;top:28%;width:30%;height:48%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.7) 0%,rgba(90,245,255,0.32) 32%,transparent 68%);"></div>' +
-        /* Ripples (only when running) */
-        ripples +
-      '</div>' +
-
-      /* Layer 8: palm silhouette via data-URI SVG background – filled shapes only */
-      '<div class="ph-palm" style="' +
-        'left:0;top:0;width:16%;height:68%;' +
-        'background-image:url(\'data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 80 200%22%3E%3Cpath d%3D%22M40 200 C39 170 37 140 38 110 C39 80 41 60 42 45 C43 60 44 80 45 110 C46 140 43 170 42 200Z%22 fill%3D%22%23100804%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2222%22 ry%3D%228%22 fill%3D%22%23071207%22 opacity%3D%220.9%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2228%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(-20 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2225%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(25 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(-45 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(50 42 45)%22%2F%3E%3C%2Fsvg%3E\');' +
-        'background-repeat:no-repeat;background-position:center bottom;background-size:contain;' +
-        'opacity:0.85;filter:blur(1px);' +
-      '"></div>' +
-
-      /* Layer 9: deck furniture (umbrella + chairs as blurred dark shapes) */
-      '<div class="ph-furniture" style="' +
-        'right:22%;top:38%;width:20%;height:28%;' +
-        'background:' +
-          'radial-gradient(ellipse 55% 25% at 50% 15%, rgba(15,15,30,0.88) 0%, transparent 100%),' +
-          'linear-gradient(to bottom, transparent 20%, rgba(15,15,30,0.72) 20%, rgba(15,15,30,0.72) 75%, transparent 75%);' +
-        'background-size:70% 100%, 3px 55%;' +
-        'background-position:center top, center 20%;' +
-        'background-repeat:no-repeat;' +
-      '"></div>' +
-
-      /* Layer 10: vignette depth overlay */
-      '<div class="ph-vignette" style="' +
-        'inset:0;' +
-        'background:radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(0,0,0,0.4) 100%);' +
-      '"></div>' +
-
-      /* Layer 11: user-provided background image (auto-fallback if URL 404s) */
-      userImgLayer +
-
-    '</div>';
+  return '<div class="pool-hero">' +
+    '<div class="ph-sky" style="background:radial-gradient(ellipse 130% 55% at 50% -5%,#0b230a 0%,transparent 55%),radial-gradient(ellipse 55% 60% at 3% 25%,#061406 0%,transparent 45%),radial-gradient(ellipse 45% 50% at 97% 25%,#061406 0%,transparent 45%),linear-gradient(to bottom,#040810 0%,#0a1520 100%);filter:blur(3px);"></div>' +
+    '<div class="ph-foliage" style="background:radial-gradient(ellipse 40% 80% at 8% 85%,rgba(4,16,4,0.95) 0%,transparent 100%),radial-gradient(ellipse 30% 70% at 22% 90%,rgba(7,22,7,0.9) 0%,transparent 100%),radial-gradient(ellipse 35% 75% at 38% 88%,rgba(5,18,5,0.92) 0%,transparent 100%),radial-gradient(ellipse 40% 80% at 55% 90%,rgba(6,20,6,0.9) 0%,transparent 100%),radial-gradient(ellipse 30% 70% at 72% 85%,rgba(7,22,7,0.88) 0%,transparent 100%),radial-gradient(ellipse 35% 75% at 88% 88%,rgba(5,18,5,0.9) 0%,transparent 100%),radial-gradient(ellipse 25% 60% at 95% 80%,rgba(4,14,4,0.92) 0%,transparent 100%);filter:blur(5px);"></div>' +
+    '<div class="ph-deck" style="background:repeating-linear-gradient(0deg,transparent 0px,transparent 11px,rgba(0,0,0,0.28) 11px,rgba(0,0,0,0.28) 12px),repeating-linear-gradient(90deg,transparent 0px,transparent 120px,rgba(0,0,0,0.05) 120px,rgba(0,0,0,0.05) 121px),linear-gradient(to bottom,#4e3014 0%,#3d2510 35%,#2e1b0a 75%,#201208 100%);"></div>' +
+    '<div class="ph-lamps" style="background:radial-gradient(ellipse 7% 5% at 13% 82%,rgba(255,140,30,0.55) 0%,transparent 100%),radial-gradient(ellipse 7% 5% at 25% 90%,rgba(255,130,20,0.5) 0%,transparent 100%),radial-gradient(ellipse 8% 5% at 38% 94%,rgba(255,135,25,0.45) 0%,transparent 100%),radial-gradient(ellipse 7% 5% at 51% 93%,rgba(255,130,20,0.45) 0%,transparent 100%),radial-gradient(ellipse 7% 5% at 64% 90%,rgba(255,140,30,0.5) 0%,transparent 100%),radial-gradient(ellipse 7% 5% at 77% 83%,rgba(255,135,25,0.5) 0%,transparent 100%),radial-gradient(ellipse 6% 4% at 88% 78%,rgba(255,140,30,0.45) 0%,transparent 100%);"></div>' +
+    '<div class="ph-pool-glow" style="left:14%;right:11%;top:38%;bottom:10%;box-shadow:0 0 60px 30px rgba(0,200,255,0.15),0 0 120px 60px rgba(0,150,200,0.08);"></div>' +
+    '<div class="ph-pool-rim" style="left:14%;right:11%;top:38%;bottom:10%;border:3px solid rgba(160,185,210,0.45);box-shadow:inset 0 0 20px rgba(0,50,100,0.5);"></div>' +
+    '<div class="ph-pool-water" style="left:14.5%;right:11.5%;top:38.5%;bottom:10.5%;background:radial-gradient(ellipse at 42% 32%,#00e8ff 0%,#00c8e8 12%,#00a0c8 30%,#0077b6 58%,#024e9a 80%,#02307a 100%);">' +
+      '<div class="ph-uwl" style="left:18%;top:25%;width:32%;height:50%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.75) 0%,rgba(100,250,255,0.35) 35%,transparent 70%);"></div>' +
+      '<div class="ph-uwl" style="left:40%;top:18%;width:28%;height:45%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.65) 0%,rgba(80,240,255,0.3) 30%,transparent 65%);"></div>' +
+      '<div class="ph-uwl" style="left:62%;top:28%;width:30%;height:48%;background:radial-gradient(ellipse at center,rgba(255,255,255,0.7) 0%,rgba(90,245,255,0.32) 32%,transparent 68%);"></div>' +
+      ripples +
+    '</div>' +
+    '<div class="ph-palm" style="left:0;top:0;width:16%;height:68%;background-image:url(\'data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 80 200%22%3E%3Cpath d%3D%22M40 200 C39 170 37 140 38 110 C39 80 41 60 42 45 C43 60 44 80 45 110 C46 140 43 170 42 200Z%22 fill%3D%22%23100804%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2222%22 ry%3D%228%22 fill%3D%22%23071207%22 opacity%3D%220.9%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2228%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(-20 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2225%22 ry%3D%225%22 fill%3D%22%23091509%22 opacity%3D%220.8%22 transform%3D%22rotate(25 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(-45 42 45)%22%2F%3E%3Cellipse cx%3D%2242%22 cy%3D%2245%22 rx%3D%2220%22 ry%3D%224%22 fill%3D%22%23071207%22 opacity%3D%220.7%22 transform%3D%22rotate(50 42 45)%22%2F%3E%3C%2Fsvg%3E\');background-repeat:no-repeat;background-position:center bottom;background-size:contain;opacity:0.85;filter:blur(1px);"></div>' +
+    '<div class="ph-furniture" style="right:22%;top:38%;width:20%;height:28%;background:radial-gradient(ellipse 55% 25% at 50% 15%,rgba(15,15,30,0.88) 0%,transparent 100%),linear-gradient(to bottom,transparent 20%,rgba(15,15,30,0.72) 20%,rgba(15,15,30,0.72) 75%,transparent 75%);background-size:70% 100%,3px 55%;background-position:center top,center 20%;background-repeat:no-repeat;"></div>' +
+    '<div class="ph-vignette" style="inset:0;background:radial-gradient(ellipse 80% 80% at 50% 50%,transparent 40%,rgba(0,0,0,0.4) 100%);"></div>' +
+    userImgLayer +
+  '</div>';
 }
 
-// ── Pump SVG (improved 3D shading, no visible cartoon outlines) ──────────────
+// ── Pump SVG (spinning rotor + pulsing status ring) ───────────────────────────
 
 function buildPumpSvg(running) {
-  var ringColor  = running ? '#22d3ee' : '#2a3a50';
-  var ringGlow   = running ? 'filter:drop-shadow(0 0 6px #22d3ee) drop-shadow(0 0 12px #0099cc);' : '';
-  var ringClass  = running ? ' class="pump-ring-run"' : '';
-  var statusDot  = running ? '#22c55e' : '#374151';
-  var centerDot  = running ? '#22d3ee' : '#374151';
+  var ringGlow    = running ? 'filter:drop-shadow(0 0 6px #22d3ee) drop-shadow(0 0 12px #0099cc);' : '';
+  var ringClass   = running ? ' class="pump-ring-run"' : '';
+  var statusDot   = running ? '#22c55e' : '#374151';
+  var rotorClass  = running ? 'class="pump-rotor-run"' : '';
+  var rotorColor  = running ? '#22d3ee' : '#374151';
+  var rotorOpacity = running ? '0.85' : '0.45';
+  var statusRingClass = running ? 'class="pump-status-ring-run"' : '';
+  var statusRingColor = running ? '#22c55e' : '#2a3a50';
 
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90">' +
     '<defs>' +
@@ -437,25 +386,17 @@ function buildPumpSvg(running) {
         '<stop offset="100%" stop-color="#0e1820"/>' +
       '</linearGradient>' +
     '</defs>' +
-    /* Base plate */
     '<rect x="8" y="74" width="104" height="10" rx="3" fill="#0f1822"/>' +
     '<rect x="8" y="74" width="104" height="3" rx="3" fill="rgba(255,255,255,0.05)"/>' +
-    /* Volute pump body */
+    '<circle cx="44" cy="50" r="28" fill="none" stroke="' + statusRingColor + '" stroke-width="2" opacity="0.3" ' + statusRingClass + '/>' +
     '<ellipse cx="44" cy="50" rx="30" ry="22" fill="url(#pg-vol)"/>' +
-    /* Volute specular */
     '<ellipse cx="36" cy="41" rx="11" ry="6" fill="rgba(255,255,255,0.05)"/>' +
-    /* Inlet pipe */
     '<rect x="6" y="43" width="16" height="14" rx="4" fill="url(#pg-pip)"/>' +
     '<rect x="2" y="45" width="6" height="10" rx="2" fill="#0b1520"/>' +
-    /* Outlet pipe top */
     '<rect x="36" y="28" width="12" height="14" rx="3" fill="url(#pg-pip)"/>' +
-    /* Motor housing */
     '<rect x="68" y="32" width="40" height="36" rx="8" fill="url(#pg-mot)"/>' +
-    /* Motor highlight strip */
     '<rect x="69" y="33" width="4" height="34" rx="2" fill="rgba(255,255,255,0.06)"/>' +
-    /* Connection flange */
     '<rect x="64" y="44" width="6" height="10" rx="1" fill="#1a2a3a"/>' +
-    /* LED ring group */
     '<g' + ringClass + ' style="transform-origin:88px 50px;' + ringGlow + '">' +
       (running ?
         '<circle cx="88" cy="50" r="17" fill="none" stroke="#22d3ee" stroke-width="4" opacity="0.12"/>' +
@@ -464,102 +405,69 @@ function buildPumpSvg(running) {
         '<circle cx="88" cy="50" r="13" fill="none" stroke="#2a3a50" stroke-width="3" opacity="0.8"/>'
       ) +
     '</g>' +
-    /* Impeller centre */
-    '<circle cx="44" cy="50" r="5" fill="#1a2535"/>' +
-    '<circle cx="44" cy="50" r="3" fill="' + centerDot + '" opacity="0.55"/>' +
-    /* Status dot */
+    '<g ' + rotorClass + ' style="transform-origin:44px 50px;">' +
+      '<line x1="44" y1="50" x2="44" y2="36" stroke="' + rotorColor + '" stroke-width="2.5" stroke-linecap="round" opacity="' + rotorOpacity + '"/>' +
+      '<line x1="44" y1="50" x2="57" y2="58" stroke="' + rotorColor + '" stroke-width="2.5" stroke-linecap="round" opacity="' + rotorOpacity + '"/>' +
+      '<line x1="44" y1="50" x2="31" y2="58" stroke="' + rotorColor + '" stroke-width="2.5" stroke-linecap="round" opacity="' + rotorOpacity + '"/>' +
+    '</g>' +
+    '<circle cx="44" cy="50" r="4" fill="' + (running ? '#22d3ee' : '#1a2535') + '" opacity="0.9"/>' +
     '<circle cx="110" cy="32" r="4" fill="' + statusDot + '" opacity="0.9"/>' +
   '</svg>';
 }
 
-// ── Filter SVG (improved cylinder + realistic gauge) ─────────────────────────
+// ── Filter SVG ────────────────────────────────────────────────────────────────
 
 function buildFilterSvg() {
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" width="80" height="120">' +
-    '<defs>' +
-      '<linearGradient id="fg-cyl" x1="0%" y1="0%" x2="100%" y2="0%">' +
-        '<stop offset="0%" stop-color="#1a2530"/>' +
-        '<stop offset="30%" stop-color="#243344"/>' +
-        '<stop offset="70%" stop-color="#1e2c3c"/>' +
-        '<stop offset="100%" stop-color="#0e1520"/>' +
-      '</linearGradient>' +
-    '</defs>' +
-    /* Pipe fittings */
+    '<defs><linearGradient id="fg-cyl" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1a2530"/><stop offset="30%" stop-color="#243344"/><stop offset="70%" stop-color="#1e2c3c"/><stop offset="100%" stop-color="#0e1520"/></linearGradient></defs>' +
     '<rect x="0" y="28" width="14" height="8" rx="3" fill="#131b26"/>' +
     '<rect x="66" y="74" width="14" height="8" rx="3" fill="#131b26"/>' +
-    /* Main cylinder */
     '<rect x="12" y="18" width="56" height="80" rx="2" fill="url(#fg-cyl)"/>' +
-    /* Cylinder highlight */
     '<rect x="14" y="20" width="5" height="76" rx="2" fill="rgba(255,255,255,0.04)"/>' +
-    /* Top dome cap */
     '<ellipse cx="40" cy="18" rx="28" ry="10" fill="#1e2c3c"/>' +
     '<ellipse cx="40" cy="8" rx="18" ry="7" fill="#141e2c"/>' +
-    /* Bottom cap */
     '<ellipse cx="40" cy="98" rx="28" ry="10" fill="#141e2c"/>' +
-    /* Band rings */
     '<rect x="12" y="33" width="56" height="3" rx="1" fill="rgba(0,0,0,0.4)"/>' +
     '<rect x="12" y="76" width="56" height="3" rx="1" fill="rgba(0,0,0,0.4)"/>' +
-    /* Pressure gauge face */
     '<circle cx="40" cy="55" r="16" fill="#e8eaed"/>' +
     '<circle cx="40" cy="55" r="14" fill="#f4f5f6"/>' +
-    /* Scale marks */
     '<line x1="40" y1="42" x2="40" y2="45" stroke="#9ca3af" stroke-width="1"/>' +
     '<line x1="51" y1="45" x2="49" y2="47" stroke="#9ca3af" stroke-width="1"/>' +
     '<line x1="54" y1="55" x2="51" y2="55" stroke="#9ca3af" stroke-width="1"/>' +
     '<line x1="29" y1="45" x2="31" y2="47" stroke="#9ca3af" stroke-width="1"/>' +
     '<line x1="26" y1="55" x2="29" y2="55" stroke="#9ca3af" stroke-width="1"/>' +
-    /* Needle pointing to ~1.2 bar (2 o'clock position) */
     '<line x1="40" y1="55" x2="48" y2="46" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>' +
-    /* Centre screw */
     '<circle cx="40" cy="55" r="2.5" fill="#6b7280"/>' +
-    /* Gauge housing ring */
     '<circle cx="40" cy="55" r="16" fill="none" stroke="#9ca3af" stroke-width="1"/>' +
-    /* Label */
     '<text x="40" y="67" text-anchor="middle" font-size="5" fill="#6b7280">bar</text>' +
-    /* Bottom pipe */
     '<rect x="26" y="98" width="28" height="14" rx="3" fill="#131b26"/>' +
   '</svg>';
 }
 
-// ── Doser SVG (two realistic chemical bottles) ───────────────────────────────
+// ── Doser SVG ─────────────────────────────────────────────────────────────────
 
 function buildDoserSvg() {
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 100" width="110" height="100">' +
-
-    /* ── LEFT BOTTLE – pH (blue) ── */
-    /* Cap */
     '<rect x="17" y="6" width="20" height="8" rx="3" fill="#2040a0"/>' +
-    /* Neck */
     '<rect x="19" y="13" width="16" height="9" rx="3" fill="rgba(15,30,70,0.85)"/>' +
-    /* Bottle body */
     '<rect x="9" y="21" width="36" height="64" rx="6" fill="rgba(10,22,55,0.75)" stroke="rgba(100,150,220,0.35)" stroke-width="1"/>' +
-    /* Liquid fill level (~65 %) */
     '<rect x="10" y="42" width="34" height="42" rx="0" fill="rgba(30,80,190,0.65)"/>' +
-    /* Reflection highlight */
     '<rect x="12" y="23" width="5" height="58" rx="2" fill="rgba(255,255,255,0.1)"/>' +
-    /* Label */
     '<rect x="13" y="49" width="28" height="20" rx="3" fill="rgba(240,245,255,0.88)"/>' +
     '<text x="27" y="63" text-anchor="middle" font-size="9" font-weight="700" fill="#1a3060">pH</text>' +
-
-    /* ── RIGHT BOTTLE – Cl/Redox (red) ── */
-    /* Cap */
     '<rect x="73" y="6" width="20" height="8" rx="3" fill="#b01010"/>' +
-    /* Neck */
     '<rect x="75" y="13" width="16" height="9" rx="3" fill="rgba(70,15,15,0.85)"/>' +
-    /* Bottle body */
     '<rect x="65" y="21" width="36" height="64" rx="6" fill="rgba(55,10,10,0.75)" stroke="rgba(220,80,80,0.35)" stroke-width="1"/>' +
-    /* Liquid fill level */
     '<rect x="66" y="42" width="34" height="42" rx="0" fill="rgba(165,20,20,0.65)"/>' +
-    /* Reflection highlight */
     '<rect x="68" y="23" width="5" height="58" rx="2" fill="rgba(255,255,255,0.1)"/>' +
-    /* Label */
     '<rect x="69" y="49" width="28" height="20" rx="3" fill="rgba(255,240,240,0.88)"/>' +
     '<text x="83" y="63" text-anchor="middle" font-size="9" font-weight="700" fill="#600d0d">Cl</text>' +
-
   '</svg>';
 }
 
-// ── Utilities ────────────────────────────────────────────────────────────────
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
 function fmtTimestamp(iso) {
   if (!iso || iso === 'unknown' || iso === 'unavailable' || iso === '–') return '–';
@@ -570,31 +478,125 @@ function fmtTimestamp(iso) {
     var h = d.getHours().toString();
     var m = d.getMinutes();
     m = m < 10 ? '0' + m : '' + m;
-    var isToday = d.getFullYear() === now.getFullYear() &&
-                  d.getMonth() === now.getMonth() &&
-                  d.getDate() === now.getDate();
+    var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
     var isTomorrow = (d - now) < 86400000 && !isToday && d > now;
     var prefix = isToday ? 'Heute ' : (isTomorrow ? 'Morgen ' : '');
     return prefix + h + ':' + m + ' Uhr';
   } catch (e) { return iso; }
 }
 
-// ── Page Builders ────────────────────────────────────────────────────────────
+// ── Diagnostics rows builder (used in gear modal) ─────────────────────────────
 
-function buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT) {
+function buildDiagRows(E, hass) {
+  if (!E || !hass || !hass.states) return '<div class="diag-summary">Keine Daten.</div>';
+
+  var DISPLAY_NAMES = {
+    automation:'Automatik', running:'Pumpe läuft', warning:'Warnung', status:'Status',
+    power:'Leistung', energy:'Energie', voltage:'Spannung', current:'Strom', frequency:'Frequenz',
+    runtimeToday:'Laufzeit heute', remaining:'Restlaufzeit', target:'Tagesziel',
+    efficiency:'Effizienz', nextStart:'Nächster Start', totalRuntime:'Gesamtlaufzeit',
+    seasonRuntime:'Saisonlaufzeit', maintenance:'Seit Wartung', seasonMode:'Saisonmodus',
+    ph:'pH', redox:'Redox', temperature:'Temperatur', btnMaint:'Reset Wartung', btnSeason:'Reset Saison',
+  };
+  var PLACEHOLDER = { ph: true, redox: true, temperature: true };
+  var METERING    = { power: true, energy: true, voltage: true, current: true, frequency: true };
+
+  var cntOk = 0, cntWarn = 0, cntMiss = 0;
+  var rows = '';
+  var keys = Object.keys(E);
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var actId = E[key];
+    var stateObj = hass.states[actId];
+    var rawState = stateObj ? stateObj.state : null;
+    var isUnavail = rawState === 'unavailable' || rawState === 'unknown';
+    var sym, symCls, valCls, displayVal;
+
+    if (!stateObj) {
+      sym = '✗'; symCls = 'miss'; cntMiss++;
+      displayVal = 'fehlt';
+    } else if (isUnavail && (PLACEHOLDER[key] || METERING[key])) {
+      sym = '?'; symCls = 'warn'; cntWarn++;
+      displayVal = 'n/a';
+    } else if (isUnavail) {
+      sym = '?'; symCls = 'warn'; cntWarn++;
+      displayVal = 'unavail';
+    } else {
+      sym = '✓'; symCls = 'ok'; cntOk++;
+      var unit = stateObj.attributes && stateObj.attributes.unit_of_measurement ? stateObj.attributes.unit_of_measurement : '';
+      displayVal = rawState + (unit ? ' ' + unit : '');
+    }
+    valCls = (isUnavail || !stateObj) ? 'diag-val unavail' : 'diag-val';
+
+    rows += '<div class="diag-row">' +
+      '<span class="diag-sym ' + symCls + '">' + sym + '</span>' +
+      '<span class="diag-key" title="' + actId + '">' + (DISPLAY_NAMES[key] || key) + '</span>' +
+      '<span class="' + valCls + '">' + displayVal + '</span>' +
+    '</div>';
+  }
+
+  var summary = '<div class="diag-summary">' +
+    '<span class="ok">✓ ' + cntOk + '</span> ok' +
+    (cntWarn ? ' &nbsp;<span class="warn">? ' + cntWarn + '</span> n/a' : '') +
+    (cntMiss ? ' &nbsp;<span class="miss">✗ ' + cntMiss + '</span> fehlt' : '') +
+    ' &nbsp;&middot; PPM v' + CARD_VERSION +
+  '</div>';
+
+  return summary + '<div class="diag-entities">' + rows + '</div>';
+}
+
+// ── Page Builders ─────────────────────────────────────────────────────────────
+
+function buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT, weekData, monthData) {
+  var todayBarStyle = 'width:' + progPct + '%';
+
+  var weekBars = '';
+  for (var wi = 0; wi < weekData.length; wi++) {
+    var wd = weekData[wi];
+    var valTxt = wd.val > 0 ? (Math.round(wd.val * 10) / 10) + 'h' : '-';
+    weekBars +=
+      '<div class="rt-bar-wrap">' +
+        '<div class="rt-bar-val">' + valTxt + '</div>' +
+        '<div class="rt-bar-outer"><div class="rt-bar-inner' + (wd.today ? ' today' : '') + '" style="height:' + wd.pct + '%"></div></div>' +
+        '<div class="rt-bar-day' + (wd.today ? ' today' : '') + '">' + wd.day + '</div>' +
+      '</div>';
+  }
+
+  var monthBars = '';
+  for (var mi = 0; mi < monthData.length; mi++) {
+    var md = monthData[mi];
+    var barCls = 'rt-month-bar';
+    if (md.today) { barCls += ' today'; }
+    else if (md.pct > 0) { barCls += ' filled'; }
+    monthBars += '<div class="' + barCls + '" style="height:' + Math.max(4, md.pct * 0.4) + 'px" title="' + (md.val > 0 ? (Math.round(md.val*10)/10) + 'h' : '-') + '"></div>';
+  }
+
   return '<div class="page-body">' +
     '<div class="page-hdr">Laufzeiten</div>' +
-    '<div class="page-grid">' +
-      '<div class="page-card"><div class="pc-lbl">Laufzeit heute</div><div class="pc-val">' + runtime + ' h</div>' +
-        '<div class="prog-wrap" style="margin-top:6px"><div class="prog-fill" style="width:' + progPct + '%"></div></div>' +
-        '<div class="prog-pct">' + progPct + '% von ' + target + ' h</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Restlaufzeit</div><div class="pc-val">' + remaining + ' h</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Nächster Start</div><div class="pc-val" style="font-size:18px;">' + nextStart + '</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Tagesziel</div><div class="pc-val">' + target + ' h</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Saisonlaufzeit</div><div class="pc-val">' + seasRT + ' h</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Gesamtlaufzeit</div><div class="pc-val">' + totalRT + ' h</div></div>' +
+
+    '<div class="rt-section">' +
+      '<div class="rt-sec-title">Heute</div>' +
+      '<div class="rt-today-nums">' +
+        '<div class="rt-today-stat"><div class="rt-today-lbl">Laufzeit</div><div class="rt-today-val">' + runtime + ' h</div></div>' +
+        '<div class="rt-today-stat"><div class="rt-today-lbl">Restlaufzeit</div><div class="rt-today-val">' + remaining + ' h</div></div>' +
+        '<div class="rt-today-stat"><div class="rt-today-lbl">Tagesziel</div><div class="rt-today-val">' + target + ' h</div></div>' +
+        '<div class="rt-today-stat"><div class="rt-today-lbl">Nächster Start</div><div class="rt-today-val" style="font-size:14px;">' + nextStart + '</div></div>' +
+      '</div>' +
+      '<div class="rt-today-bar-wrap"><div class="rt-today-bar-fill" style="' + todayBarStyle + '"><span class="rt-today-bar-pct">' + progPct + '%</span></div></div>' +
+      '<div class="rt-today-bar-labels"><span>0 h</span><span>Ziel: ' + target + ' h</span></div>' +
     '</div>' +
-    '<div class="page-note">📊 Für Diagramme das HA Energie-Dashboard oder den HA Verlauf verwenden.</div>' +
+
+    '<div class="rt-section">' +
+      '<div class="rt-sec-title">Letzte 7 Tage</div>' +
+      '<div class="rt-week-grid">' + weekBars + '</div>' +
+    '</div>' +
+
+    '<div class="rt-section">' +
+      '<div class="rt-sec-title">Letzte 30 Tage</div>' +
+      '<div class="rt-month-grid">' + monthBars + '</div>' +
+    '</div>' +
+
+    '<div class="page-note">Gesamtlaufzeit: <b>' + totalRT + ' h</b> &nbsp;&middot;&nbsp; Saisonlaufzeit: <b>' + seasRT + ' h</b></div>' +
   '</div>';
 }
 
@@ -602,11 +604,11 @@ function buildPageSettings(autoOn, season) {
   var toggleClass = autoOn ? 'on' : 'off';
   var toggleLbl   = autoOn ? 'EIN' : 'AUS';
   var seasons = [
-    { k: 'auto',   i: '⚙️', l: 'Auto' },
-    { k: 'spring', i: '🌸', l: 'Frühling' },
-    { k: 'summer', i: '☀️', l: 'Sommer' },
-    { k: 'autumn', i: '🍂', l: 'Herbst' },
-    { k: 'winter', i: '❄️', l: 'Winter' },
+    { k:'auto',   i:'⚙️',   l:'Auto' },
+    { k:'spring', i:'\U0001f338', l:'Frühling' },
+    { k:'summer', i:'☀️',   l:'Sommer' },
+    { k:'autumn', i:'\U0001f342', l:'Herbst' },
+    { k:'winter', i:'❄️',   l:'Winter' },
   ];
   var sBtns = '';
   for (var si = 0; si < seasons.length; si++) {
@@ -616,7 +618,7 @@ function buildPageSettings(autoOn, season) {
   return '<div class="page-body">' +
     '<div class="page-hdr">Einstellungen</div>' +
     '<div class="set-section">' +
-      '<div class="set-lbl">Automatik</div>' +
+      '<div class="set-lbl">Automatikbetrieb</div>' +
       '<div class="ctrl-auto-row" id="btn-toggle-auto-s">' +
         '<span class="ctrl-auto-lbl">Automatikmodus</span>' +
         '<div class="ctrl-toggle-wrap">' +
@@ -631,11 +633,7 @@ function buildPageSettings(autoOn, season) {
     '</div>' +
     '<div class="set-section">' +
       '<div class="set-lbl">Tagesziel</div>' +
-      '<div class="set-note">Wird automatisch berechnet (Poolvolumen × Umwälzungen ÷ Förderleistung).<br>Ändern: Einstellungen → Integrationen → Pool Pump Manager → Konfigurieren.</div>' +
-    '</div>' +
-    '<div class="set-section">' +
-      '<div class="set-lbl">Eigenes Poolbild</div>' +
-      '<div class="set-note">Bilddatei speichern unter:<br><code>/config/www/pool-pump-manager/pool-background.jpg</code><br>Die Card lädt das Bild automatisch beim nächsten Seitenaufruf.<br><br>Alternativ in der Card-Konfiguration:<br><code>pool_image: /local/mein-pool.jpg</code></div>' +
+      '<div class="set-note">Wird automatisch berechnet (Poolvolumen × Umwälzungen ÷ Förderleistung). Ändern via Integrationen → Pool Pump Manager → Konfigurieren.</div>' +
     '</div>' +
   '</div>';
 }
@@ -650,161 +648,54 @@ function buildPageMaintenance(maint, totalRT, seasRT, maintCountdown) {
       '<div class="page-card"><div class="pc-lbl">Nächste Wartung in</div><div class="pc-val" style="color:#22c55e;">' + maintCountdown + ' h</div></div>' +
     '</div>' +
     '<div class="maint-row">' +
-      '<button class="btn-maint-lg" id="btn-maint">🔧 Wartung Reset</button>' +
-      '<button class="btn-maint-lg" id="btn-season-reset">📅 Saison Reset</button>' +
+      '<button class="btn-maint-lg" id="btn-maint">\U0001f527 Wartung Reset</button>' +
+      '<button class="btn-maint-lg" id="btn-season-reset">\U0001f4c5 Saison Reset</button>' +
     '</div>' +
     '<div class="page-note">Reset setzt den jeweiligen Stundenzähler auf 0 zurück.</div>' +
   '</div>';
 }
 
-function buildPageHistory() {
-  return '<div class="page-body">' +
-    '<div class="page-hdr">Historie</div>' +
-    '<div class="page-note">📊 Für Energieverbrauch- und Laufzeit-Diagramme das HA Energie-Dashboard oder den HA Verlauf (Entwicklerwerkzeuge) verwenden.</div>' +
-    '<div class="page-grid">' +
-      '<div class="page-card"><div class="pc-lbl">Leistungsverlauf</div><div class="pc-sub">sensor.pool_pump_manager_power</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Energieverbrauch</div><div class="pc-sub">sensor.pool_pump_manager_energy</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Laufzeiten</div><div class="pc-sub">sensor.pool_pump_manager_runtime_today</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Effizienz</div><div class="pc-sub">sensor.pool_pump_manager_efficiency</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Saisonlaufzeit</div><div class="pc-sub">sensor.pool_pump_manager_season_runtime</div></div>' +
-      '<div class="page-card"><div class="pc-lbl">Gesamtlaufzeit</div><div class="pc-sub">sensor.pool_pump_manager_total_runtime</div></div>' +
-    '</div>' +
-  '</div>';
-}
-
-function buildPageInfo(E, hass, debugMode) {
-  var DISPLAY_NAMES = {
-    automation:    'Automatik',
-    running:       'Pumpe läuft',
-    warning:       'Warnung',
-    status:        'Status',
-    power:         'Leistung',
-    energy:        'Energie',
-    voltage:       'Spannung',
-    current:       'Strom',
-    frequency:     'Frequenz',
-    runtimeToday:  'Laufzeit heute',
-    remaining:     'Restlaufzeit',
-    target:        'Tagesziel',
-    efficiency:    'Effizienz',
-    nextStart:     'Nächster Start',
-    totalRuntime:  'Gesamtlaufzeit',
-    seasonRuntime: 'Saisonlaufzeit',
-    maintenance:   'Seit Wartung',
-    seasonMode:    'Saisonmodus',
-    ph:            'pH-Wert',
-    redox:         'Redox',
-    temperature:   'Temperatur',
-    btnMaint:      'Reset Wartung',
-    btnSeason:     'Reset Saison',
-  };
-
-  var rows = '';
-  var cntOk = 0, cntUnavail = 0, cntMiss = 0;
-
-  // Keys where unavailable is expected (placeholder sensors)
-  var PLACEHOLDER_KEYS = { ph: true, redox: true, temperature: true };
-  // Keys that require external sensor configuration
-  var METERING_KEYS = { power: true, energy: true, voltage: true, current: true, frequency: true };
-
-  if (E && hass && hass.states) {
-    var keys = Object.keys(E);
-    for (var i = 0; i < keys.length; i++) {
-      var key      = keys[i];
-      var actId    = E[key];
-      var defId    = ENTITY_DEFAULTS[key] || actId;
-      var remapped = (actId !== defId);
-      var stateObj = hass.states[actId];
-      var rawState = stateObj ? stateObj.state : null;
-      var unit     = stateObj && stateObj.attributes && stateObj.attributes.unit_of_measurement
-                       ? stateObj.attributes.unit_of_measurement : '';
-      var isUnavail = rawState === 'unavailable' || rawState === 'unknown';
-      var sym, cls, valCls, reason;
-
-      if (!stateObj) {
-        sym = '✗'; cls = 'info-miss'; cntMiss++;
-        reason = 'Entity nicht in HA registriert';
-      } else if (isUnavail && PLACEHOLDER_KEYS[key]) {
-        sym = '–'; cls = 'info-warn'; cntUnavail++;
-        reason = 'Platzhalter — Sensor-Konfiguration erforderlich';
-      } else if (isUnavail && METERING_KEYS[key]) {
-        sym = '?'; cls = 'info-warn'; cntUnavail++;
-        reason = 'Metering-Sensor: externer Sensor nicht konfiguriert';
-      } else if (rawState === 'unavailable') {
-        sym = '?'; cls = 'info-warn'; cntUnavail++;
-        reason = 'Entity unavailable';
-      } else if (rawState === 'unknown') {
-        sym = '?'; cls = 'info-warn'; cntUnavail++;
-        reason = 'Entity unknown — noch kein Wert';
-      } else {
-        sym = '✓'; cls = 'info-ok'; cntOk++;
-        reason = '';
-      }
-
-      var displayVal = rawState !== null ? (rawState + (unit ? ' ' + unit : '')) : '–';
-      valCls = isUnavail ? 'info-val unavail' : 'info-val';
-
-      var lastChanged = '';
-      if (debugMode && stateObj && stateObj.last_changed) {
-        try {
-          var lc = new Date(stateObj.last_changed);
-          lastChanged = ' <span style="color:#6b7280;font-size:9px;">∆ ' + lc.toLocaleTimeString() + '</span>';
-        } catch (e) { /* ignore */ }
-      }
-
-      rows += '<div class="info-row">' +
-        '<span class="' + cls + '">' + sym + '</span>' +
-        '<span class="info-key" title="' + key + '">' + (DISPLAY_NAMES[key] || key) + '</span>' +
-        '<span class="info-eid' + (remapped ? ' remapped' : '') + '" title="' + actId + '">' + actId + '</span>' +
-        '<span class="' + valCls + '">' + (reason && !rawState ? reason : displayVal + lastChanged) + '</span>' +
-      '</div>';
-    }
-  }
-
-  return '<div class="page-body">' +
-    '<div class="page-hdr">Info &amp; Diagnose</div>' +
-    '<div class="info-block">' +
-      '<div class="info-kv"><span class="info-kv-k">Integration</span><span class="info-kv-v">Pool Pump Manager</span></div>' +
-      '<div class="info-kv"><span class="info-kv-k">Card Version</span><span class="info-kv-v">v' + CARD_VERSION + '</span></div>' +
-      '<div class="info-kv"><span class="info-kv-k">Entities Status</span><span class="info-kv-v">' +
-        '<span style="color:#22c55e;">✓ ' + cntOk + '</span>' +
-        (cntUnavail ? '&nbsp; <span style="color:#f59e0b;">? ' + cntUnavail + '</span>' : '') +
-        (cntMiss    ? '&nbsp; <span style="color:#ef4444;">✗ ' + cntMiss    + '</span>' : '') +
-      '</span></div>' +
-      '<div class="info-kv"><span class="info-kv-k">Repository</span><span class="info-kv-v"><a class="info-link" href="https://github.com/choell401780/homeassistant-pool-pump-manager" target="_blank">GitHub ↗</a></span></div>' +
-    '</div>' +
-    '<div class="page-sub-hdr">Entities — ✓ gefunden · ? unavailable · ✗ nicht gefunden · <span style="color:#f59e0b;">gelb = remapped</span>' + (debugMode ? ' · Debug-Modus aktiv: letztes Update sichtbar' : '') + '</div>' +
-    '<div class="info-entities">' + rows + '</div>' +
-    '<div class="page-note" style="margin-top:0;">' +
-      '<b>Metering-Sensoren</b> (Leistung, Spannung, Strom, Frequenz, Energie) zeigen erst Werte, wenn im Config Flow ein externer Sensor konfiguriert wurde.<br>' +
-      '<b>Wasserqualität</b> (pH, Redox, Temperatur) sind Platzhalter und werden in einer zukünftigen Version konfigurierbar.' +
-    '</div>' +
-  '</div>';
-}
-
-// ── Card Class ───────────────────────────────────────────────────────────────
+// ── Card Class ────────────────────────────────────────────────────────────────
 
 class PoolControlCenterCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass         = null;
-    this._E            = null;
-    this._cfg          = {};
-    this._page         = 'overview';
-    this._settingsOpen = false;
-    this._settings     = { poolImage: '', debugMode: false };
-    this._toast        = null;
+    this._hass           = null;
+    this._E              = null;
+    this._cfg            = {};
+    this._page           = 'overview';
+    this._settingsOpen   = false;
+    this._settings       = { poolImage: '', debugMode: false };
+    this._poolImageData  = '';
+    this._toast          = null;
+    this._optimisticAuto   = undefined;
+    this._optimisticSeason = null;
     this._loadSettings();
     LOG.debug('Card constructed, version:', CARD_VERSION);
   }
+
+  // ── hass setter ─────────────────────────────────────────────────────────────
 
   set hass(hass) {
     var oldHass = this._hass;
     this._hass = hass;
     if (!this._E || this._needsResolve()) this._resolveEntities();
-    // Don't re-render while settings modal is open (preserves input focus)
-    // and skip if no relevant entity state has actually changed (performance)
+
+    if (this._E) {
+      // Save today's runtime to localStorage for history charts
+      var rtRaw = this._val(this._E.runtimeToday, null);
+      if (rtRaw !== null) this._saveDailyRuntime(rtRaw);
+
+      // Clear optimistic states once HA confirms
+      if (this._optimisticAuto !== undefined && this._isOn(this._E.automation) === this._optimisticAuto) {
+        this._optimisticAuto = undefined;
+      }
+      if (this._optimisticSeason !== null && this._val(this._E.seasonMode, 'auto') === this._optimisticSeason) {
+        this._optimisticSeason = null;
+      }
+    }
+
     if (!this._settingsOpen && this._hasRelevantChange(oldHass, hass)) {
       this._render();
     }
@@ -824,6 +715,8 @@ class PoolControlCenterCard extends HTMLElement {
     return false;
   }
 
+  // ── Toast ───────────────────────────────────────────────────────────────────
+
   _showToast(msg, type) {
     var self = this;
     this._toast = { msg: msg, type: type };
@@ -834,15 +727,20 @@ class PoolControlCenterCard extends HTMLElement {
     }, 2800);
   }
 
+  // ── Settings persistence ─────────────────────────────────────────────────────
+
   _loadSettings() {
     try {
       var raw = window.localStorage.getItem('pcc-v1-settings');
       if (raw) {
         var p = JSON.parse(raw);
-        this._settings.poolImage  = p.poolImage  || '';
-        this._settings.debugMode  = !!p.debugMode;
+        this._settings.poolImage = p.poolImage || '';
+        this._settings.debugMode = !!p.debugMode;
       }
     } catch (e) { LOG.debug('Settings load failed:', e); }
+    try {
+      this._poolImageData = window.localStorage.getItem('pcc-v1-imgdata') || '';
+    } catch (e) { this._poolImageData = ''; }
   }
 
   _saveSettings() {
@@ -851,10 +749,71 @@ class PoolControlCenterCard extends HTMLElement {
     } catch (e) { LOG.debug('Settings save failed:', e); }
   }
 
+  _savePoolImageData() {
+    try {
+      if (this._poolImageData) {
+        window.localStorage.setItem('pcc-v1-imgdata', this._poolImageData);
+      } else {
+        window.localStorage.removeItem('pcc-v1-imgdata');
+      }
+    } catch (e) { LOG.debug('Pool image data save failed:', e); }
+  }
+
+  // ── Runtime history ──────────────────────────────────────────────────────────
+
+  _saveDailyRuntime(val) {
+    try {
+      var n = parseFloat(val);
+      if (isNaN(n) || n < 0) return;
+      var d = new Date();
+      var key = 'pcc-v1-rt-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+      window.localStorage.setItem(key, String(n));
+    } catch (e) {}
+  }
+
+  _loadWeekData(targetH) {
+    var dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    var result = [];
+    var now = new Date();
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(now.getTime() - i * 86400000);
+      var key = 'pcc-v1-rt-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+      var raw = null;
+      try { raw = window.localStorage.getItem(key); } catch (e) {}
+      var val = raw !== null ? parseFloat(raw) : 0;
+      if (isNaN(val)) val = 0;
+      var pct = (targetH > 0) ? Math.min(100, Math.round((val / targetH) * 100)) : 0;
+      result.push({ day: dayNames[d.getDay()], val: val, pct: pct, today: i === 0 });
+    }
+    return result;
+  }
+
+  _loadMonthData(targetH, todayVal) {
+    var result = [];
+    var now = new Date();
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(now.getTime() - i * 86400000);
+      var key = 'pcc-v1-rt-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+      var val = 0;
+      if (i === 0) {
+        val = parseFloat(todayVal) || 0;
+      } else {
+        var raw = null;
+        try { raw = window.localStorage.getItem(key); } catch (e) {}
+        val = raw !== null ? parseFloat(raw) : 0;
+        if (isNaN(val)) val = 0;
+      }
+      var pct = (targetH > 0) ? Math.min(100, Math.round((val / targetH) * 100)) : 0;
+      result.push({ val: val, pct: pct, today: i === 0 });
+    }
+    return result;
+  }
+
+  // ── Resolve ──────────────────────────────────────────────────────────────────
+
   _needsResolve() {
     if (!this._E || !this._hass || !this._hass.states) return true;
     var st = this._hass.states;
-    // Re-resolve if any of the key runtime entities is still missing or unavailable
     var critical = ['runtimeToday', 'remaining', 'target', 'totalRuntime', 'seasonRuntime', 'maintenance'];
     for (var i = 0; i < critical.length; i++) {
       var id = this._E[critical[i]];
@@ -876,10 +835,8 @@ class PoolControlCenterCard extends HTMLElement {
     var st = this._hass && this._hass.states;
     if (!st) return;
 
-    // Start from defaults
     var resolved = Object.assign({}, ENTITY_DEFAULTS);
 
-    // Apply explicit fallbacks
     var fbKeys = Object.keys(ENTITY_FALLBACKS);
     for (var ki = 0; ki < fbKeys.length; ki++) {
       var key = fbKeys[ki];
@@ -891,7 +848,6 @@ class PoolControlCenterCard extends HTMLElement {
       }
     }
 
-    // Auto-scan: build suffix→id map for all pool_pump_manager entities
     var autoMap = {};
     var allIds = Object.keys(st);
     for (var si = 0; si < allIds.length; si++) {
@@ -901,26 +857,24 @@ class PoolControlCenterCard extends HTMLElement {
         if (parts.length > 1) { autoMap[parts[1]] = id; }
       }
     }
-    LOG.debug('Auto-scan found suffixes:', Object.keys(autoMap).join(', '));
 
-    // For each key still not found, try auto-map by known suffixes (incl. German alternatives)
     var SUFFIX_MAP = {
-      runtimeToday:  ['runtime_today', 'laufzeit_heute', 'tageslaufzeit', 'laufzeit', 'runtime'],
-      remaining:     ['remaining_runtime', 'remaining', 'restlaufzeit', 'verbleibende_laufzeit', 'verbleibend'],
-      target:        ['target_runtime', 'target', 'tagesziel', 'ziel_laufzeit', 'ziel', 'sollwert'],
-      totalRuntime:  ['total_runtime', 'gesamtlaufzeit', 'betriebsstunden', 'gesamt', 'total'],
-      seasonRuntime: ['season_runtime', 'saisonlaufzeit', 'season'],
-      maintenance:   ['runtime_since_maintenance', 'since_maintenance', 'seit_wartung', 'wartungslaufzeit', 'maintenance'],
-      efficiency:    ['efficiency', 'effizienz', 'wirkungsgrad'],
-      nextStart:     ['next_start', 'naechster_start', 'next'],
-      power:         ['metering_power', 'power', 'leistung', 'watt'],
-      voltage:       ['metering_voltage', 'voltage', 'spannung'],
-      current:       ['metering_current', 'current', 'strom', 'ampere'],
-      frequency:     ['metering_frequency', 'frequency', 'frequenz', 'hz'],
-      energy:        ['metering_energy', 'energy', 'energie', 'verbrauch', 'kwh', 'kWh'],
-      ph:            ['ph', 'ph_value', 'ph_wert'],
-      redox:         ['redox', 'orp'],
-      temperature:   ['pool_temperature', 'temperature', 'water_temperature', 'temperatur', 'wassertemperatur', 'pool_temp'],
+      runtimeToday:  ['runtime_today','laufzeit_heute','tageslaufzeit','laufzeit','runtime'],
+      remaining:     ['remaining_runtime','remaining','restlaufzeit','verbleibende_laufzeit','verbleibend'],
+      target:        ['target_runtime','target','tagesziel','ziel_laufzeit','ziel','sollwert'],
+      totalRuntime:  ['total_runtime','gesamtlaufzeit','betriebsstunden','gesamt','total'],
+      seasonRuntime: ['season_runtime','saisonlaufzeit','season'],
+      maintenance:   ['runtime_since_maintenance','since_maintenance','seit_wartung','wartungslaufzeit','maintenance'],
+      efficiency:    ['efficiency','effizienz','wirkungsgrad'],
+      nextStart:     ['next_start','naechster_start','next'],
+      power:         ['metering_power','power','leistung','watt'],
+      voltage:       ['metering_voltage','voltage','spannung'],
+      current:       ['metering_current','current','strom','ampere'],
+      frequency:     ['metering_frequency','frequency','frequenz','hz'],
+      energy:        ['metering_energy','energy','energie','verbrauch','kwh'],
+      ph:            ['ph','ph_value','ph_wert'],
+      redox:         ['redox','orp'],
+      temperature:   ['pool_temperature','temperature','water_temperature','temperatur','wassertemperatur','pool_temp'],
     };
     var smKeys = Object.keys(SUFFIX_MAP);
     for (var mi = 0; mi < smKeys.length; mi++) {
@@ -928,24 +882,19 @@ class PoolControlCenterCard extends HTMLElement {
       if (!st[resolved[mkey]]) {
         var suffixes = SUFFIX_MAP[mkey];
         for (var sfi = 0; sfi < suffixes.length; sfi++) {
-          if (autoMap[suffixes[sfi]]) {
-            LOG.debug('Suffix-mapped:', mkey, '->', autoMap[suffixes[sfi]]);
-            resolved[mkey] = autoMap[suffixes[sfi]];
-            break;
-          }
+          if (autoMap[suffixes[sfi]]) { resolved[mkey] = autoMap[suffixes[sfi]]; break; }
         }
       }
     }
 
-    // Last resort: match by friendly_name attribute
     var FNAME_MAP = {
-      runtimeToday:  ['laufzeit heute', 'runtime today', 'tageslaufzeit'],
-      remaining:     ['restlaufzeit', 'remaining runtime'],
-      target:        ['tagesziel', 'target runtime', 'ziel-laufzeit'],
-      totalRuntime:  ['gesamtlaufzeit', 'total runtime', 'betriebsstunden'],
-      seasonRuntime: ['saisonlaufzeit', 'season runtime'],
-      maintenance:   ['seit wartung', 'runtime since maintenance', 'since maintenance'],
-      nextStart:     ['nächster start', 'next start', 'naechster start'],
+      runtimeToday:  ['laufzeit heute','runtime today','tageslaufzeit'],
+      remaining:     ['restlaufzeit','remaining runtime'],
+      target:        ['tagesziel','target runtime','ziel-laufzeit'],
+      totalRuntime:  ['gesamtlaufzeit','total runtime','betriebsstunden'],
+      seasonRuntime: ['saisonlaufzeit','season runtime'],
+      maintenance:   ['seit wartung','runtime since maintenance','since maintenance'],
+      nextStart:     ['nächster start','next start','naechster start'],
     };
     var allStateIds = Object.keys(st);
     var fnKeys = Object.keys(FNAME_MAP);
@@ -963,17 +912,13 @@ class PoolControlCenterCard extends HTMLElement {
         var matched = false;
         for (var nmi = 0; nmi < nameList.length; nmi++) {
           if (fnl.indexOf(nameList[nmi].toLowerCase()) !== -1) {
-            LOG.debug('Friendly-name matched:', fnkey, '->', cid, '(' + fn + ')');
-            resolved[fnkey] = cid;
-            matched = true;
-            break;
+            resolved[fnkey] = cid; matched = true; break;
           }
         }
         if (matched) break;
       }
     }
 
-    // Log summary
     var found = [], unavail = [], missing = [];
     var rKeys = Object.keys(resolved);
     for (var li = 0; li < rKeys.length; li++) {
@@ -983,13 +928,12 @@ class PoolControlCenterCard extends HTMLElement {
       else if (ls.state === 'unavailable' || ls.state === 'unknown') { unavail.push(lkey); }
       else { found.push(lkey); }
     }
-    LOG.debug('Found (' + found.length + '):', found.join(', '));
-    if (unavail.length) { LOG.debug('Unavailable (' + unavail.length + '):', unavail.join(', ')); }
-    if (missing.length) { LOG.debug('Missing (' + missing.length + '):', missing.join(', ')); }
+    LOG.info('Entities resolved. v' + CARD_VERSION + ' — ' + found.length + ' ok, ' + unavail.length + ' unavail, ' + missing.length + ' missing');
 
     this._E = resolved;
-    LOG.info('Entities resolved. v' + CARD_VERSION + ' — ' + found.length + ' ok, ' + unavail.length + ' unavail, ' + missing.length + ' missing');
   }
+
+  // ── State helpers ─────────────────────────────────────────────────────────────
 
   _val(id, def) {
     if (!this._hass || !id) return (def !== undefined) ? def : '–';
@@ -1004,7 +948,7 @@ class PoolControlCenterCard extends HTMLElement {
     return !!(s && (s.state === 'on' || s.state === 'true'));
   }
 
-  _svc(domain, service, data, toastLabel) {
+  _svc(domain, service, data, toastLabel, onError) {
     if (!this._hass) { LOG.warn('callService skipped – hass not ready'); return; }
     var self  = this;
     var label = toastLabel || (domain + '.' + service);
@@ -1016,17 +960,23 @@ class PoolControlCenterCard extends HTMLElement {
         function(err) {
           LOG.warn('Service call FAILED:', domain + '.' + service, err);
           self._showToast('✗ ' + label + ' (Fehler)', 'err');
+          if (onError) onError();
         }
       );
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   _render() {
     if (!this._hass || !this._E) return;
     var E = this._E;
 
+    // Use optimistic state when set, otherwise use HA state
+    var autoOn  = (this._optimisticAuto !== undefined) ? this._optimisticAuto : this._isOn(E.automation);
+    var season  = (this._optimisticSeason !== null)    ? this._optimisticSeason : this._val(E.seasonMode, 'auto');
+
     var running   = this._isOn(E.running);
-    var autoOn    = this._isOn(E.automation);
     var warning   = this._isOn(E.warning);
     var status    = this._val(E.status, 'unknown');
     var power     = this._val(E.power, '–');
@@ -1045,13 +995,11 @@ class PoolControlCenterCard extends HTMLElement {
     var totalRT   = this._val(E.totalRuntime, '–');
     var seasRT    = this._val(E.seasonRuntime, '–');
     var maint     = this._val(E.maintenance, '–');
-    var season    = this._val(E.seasonMode, 'auto');
 
     var statusLabel = STATUS_LABEL[status] || status;
     var seasonLabel = SEASON_LABEL[season]  || season;
     var seasonIcon  = SEASON_ICON[season]   || '⚙️';
 
-    /* Progress */
     var progPct = 0;
     var rtNum = parseFloat(runtime);
     var tgNum = parseFloat(target);
@@ -1059,80 +1007,76 @@ class PoolControlCenterCard extends HTMLElement {
       progPct = Math.min(100, Math.round((rtNum / tgNum) * 100));
     }
 
-    /* Maintenance countdown */
     var maintNum = parseFloat(maint);
     var maintCountdown = '–';
-    if (!isNaN(maintNum)) {
-      maintCountdown = Math.max(0, 500 - maintNum).toFixed(0);
-    }
+    if (!isNaN(maintNum)) maintCountdown = Math.max(0, 500 - maintNum).toFixed(0);
 
-    /* Build visuals */
-    var imgUrl = this._settings.poolImage ||
-                 (this._cfg && this._cfg.pool_image) ||
-                 '/local/pool-pump-manager/pool-background.jpg';
+    var weekData  = this._loadWeekData(tgNum || 4);
+    var monthData = this._loadMonthData(tgNum || 4, runtime);
+
+    var imgUrl = this._poolImageData ||
+                 this._settings.poolImage ||
+                 (this._cfg && this._cfg.pool_image) || '';
+
     var poolHero = buildPoolHero(running, imgUrl);
     var pumpSvg  = buildPumpSvg(running);
     var filtSvg  = buildFilterSvg();
     var doserSvg = buildDoserSvg();
 
-    /* ── Warning badge — check critical entity health ── */
-    var CRITICAL_KEYS = ['running', 'status', 'runtimeToday', 'remaining', 'target',
-                         'totalRuntime', 'seasonRuntime', 'maintenance', 'automation'];
+    // Warning badge — count missing critical entities
+    var CRITICAL_KEYS = ['running','status','runtimeToday','remaining','target','totalRuntime','seasonRuntime','maintenance','automation'];
     var missingCnt = 0;
     for (var ci = 0; ci < CRITICAL_KEYS.length; ci++) {
       var cid = E[CRITICAL_KEYS[ci]];
       if (!cid || !this._hass.states[cid]) missingCnt++;
     }
     var warnBadge = missingCnt > 0 ?
-      '<div class="warn-badge" id="btn-diag">⚠ ' + missingCnt + ' fehlt</div>' : '';
+      '<div class="warn-badge" id="btn-warn">⚠ ' + missingCnt + ' fehlt</div>' : '';
 
-    /* ── Header ── */
-    var autoBadgeTitle = autoOn ? 'Automatik aktiv'          : 'Automatik aus';
-    var autoBadgeSub   = autoOn ? 'System läuft automatisch' : 'Manueller Betrieb';
-    var dotClass       = autoOn ? 'on' : 'off';
+    // Header status badge
+    var srbDotCls  = running ? 'run' : 'stop';
+    var srbTextCls = running ? 'run' : 'stop';
+    var srbTitle   = running ? 'Läuft' : 'Gestoppt';
+    var srbSub     = autoOn  ? 'Automatik aktiv' : 'Manuell';
+    var statusBadge = '<div class="srb" id="hdr-status-badge">' +
+      '<span class="srb-dot ' + srbDotCls + '"></span>' +
+      '<div><div class="srb-text ' + srbTextCls + '">' + srbTitle + '</div><div class="srb-sub">' + srbSub + '</div></div>' +
+    '</div>';
+
+    var seasonBadge = '<div class="hbadge" id="hdr-season-badge">' +
+      '<span class="hb-icon">' + seasonIcon + '</span>' +
+      '<div class="hb-text"><div class="hb-title">Saison: ' + seasonLabel + '</div><div class="hb-sub">Betriebsmodus</div></div>' +
+    '</div>';
 
     var hdr = '<div class="hdr">' +
-      '<div class="hdr-brand">' +
-        '<span class="hdr-wave">≋</span>' +
-        '<span class="hdr-title">Pool Control Center</span>' +
-      '</div>' +
+      '<div class="hdr-brand"><span class="hdr-wave">≡</span><span class="hdr-title">Pool Control Center</span></div>' +
       '<div class="hdr-badges">' +
-        '<div class="hbadge" id="hdr-auto-badge">' +
-          '<span class="hb-dot ' + dotClass + '"></span>' +
-          '<div class="hb-text"><div class="hb-title">' + autoBadgeTitle + '</div><div class="hb-sub">' + autoBadgeSub + '</div></div>' +
-        '</div>' +
-        '<div class="hbadge" id="hdr-season-badge">' +
-          '<span class="hb-icon">' + seasonIcon + '</span>' +
-          '<div class="hb-text"><div class="hb-title">Saison: ' + seasonLabel + '</div><div class="hb-sub">Betriebsmodus</div></div>' +
-        '</div>' +
-        '<div class="hbadge no-click hb-muted">' +
-          '<div class="hb-text"><div class="hb-title">PPM v' + CARD_VERSION + '</div><div class="hb-sub">Pool Pump Manager</div></div>' +
-        '</div>' +
+        statusBadge +
+        seasonBadge +
         warnBadge +
         '<button class="gear-btn' + (this._settingsOpen ? ' open' : '') + '" id="btn-gear" title="Einstellungen">⚙</button>' +
       '</div>' +
     '</div>';
 
-    /* ── Tech panel ── */
+    // Tech panel
     var pumpStatus  = running ? '<span class="tech-col-status">Läuft</span>' : '<span class="tech-col-status off">Aus</span>';
     var filtStatus  = warning ? '<span class="tech-col-status warn">Achtung</span>' : '<span class="tech-col-status">OK</span>';
-    var doserStatus = '<span class="tech-col-status">OK</span>';
 
     var tech = '<div class="tech-panel">' +
       '<div class="tech-hdr">Technik</div>' +
       '<div class="tech-grid">' +
         '<div class="tech-col">' +
-          '<div class="tech-col-hdr"><span class="tech-col-icon">🔧</span><span class="tech-col-name">Poolpumpe</span>' + pumpStatus + '</div>' +
+          '<div class="tech-col-hdr"><span class="tech-col-icon">\U0001f527</span><span class="tech-col-name">Poolpumpe</span>' + pumpStatus + '</div>' +
           '<div class="tech-visual">' + pumpSvg + '</div>' +
           '<div class="tech-col-metrics"><b>⚡ ' + power + '</b> W &nbsp; <b>⌇ ' + current + '</b> A</div>' +
         '</div>' +
         '<div class="tech-col">' +
-          '<div class="tech-col-hdr"><span class="tech-col-icon">🏺</span><span class="tech-col-name">Sandfilter</span>' + filtStatus + '</div>' +
+          '<div class="tech-col-hdr"><span class="tech-col-icon">\U0001f3fa</span><span class="tech-col-name">Sandfilter</span>' + filtStatus + '</div>' +
           '<div class="tech-visual">' + filtSvg + '</div>' +
           '<div class="tech-col-metrics"><b>⊙ –</b> bar</div>' +
         '</div>' +
         '<div class="tech-col">' +
-          '<div class="tech-col-hdr"><span class="tech-col-icon">🧪</span><span class="tech-col-name">Dosieranlage</span>' + doserStatus + '</div>' +
+          '<div class="tech-col-hdr"><span class="tech-col-icon">\U0001f9ea</span><span class="tech-col-name">Dosieranlage</span><span class="tech-col-status">OK</span></div>' +
           '<div class="tech-visual">' + doserSvg + '</div>' +
           '<div class="tech-col-metrics"><b>pH</b> ' + ph + ' &nbsp; <b>Redox</b> ' + redox + ' mV</div>' +
         '</div>' +
@@ -1140,95 +1084,56 @@ class PoolControlCenterCard extends HTMLElement {
       '<div class="tech-sysstat">● Systemstatus: Alle Komponenten in Ordnung</div>' +
     '</div>';
 
-    /* ── Main area ── */
-    var mainArea = '<div class="main-area">' +
-      '<div class="pool-area">' + poolHero + '</div>' +
-      tech +
-    '</div>';
+    var mainArea = '<div class="main-area"><div class="pool-area">' + poolHero + '</div>' + tech + '</div>';
 
-    /* ── Status bar ── */
+    // Status bar
     var statClass = running ? ' green' : '';
-    var statSub   = running ? 'Pumpe aktiv' : 'Pumpe inaktiv';
-
     var statBar = '<div class="stat-bar">' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Status</div>' +
-        '<div class="stat-main"><span class="stat-ico" style="color:#22c55e;">▶</span><span class="stat-val' + statClass + '">' + statusLabel + '</span></div>' +
-        '<div class="stat-sub">' + statSub + '</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Leistung</div>' +
-        '<div class="stat-main"><span class="stat-ico" style="color:#eab308;">⚡</span><span class="stat-val yellow">' + power + '</span><span class="stat-unit">W</span></div>' +
-        '<div class="stat-sub">Aktuelle Leistung</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Spannung</div>' +
-        '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">〜</span><span class="stat-val blue">' + voltage + '</span><span class="stat-unit">V</span></div>' +
-        '<div class="stat-sub">Netzspannung</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Strom</div>' +
-        '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⏦</span><span class="stat-val blue">' + current + '</span><span class="stat-unit">A</span></div>' +
-        '<div class="stat-sub">Aktueller Strom</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Frequenz</div>' +
-        '<div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⊟</span><span class="stat-val blue">' + freq + '</span><span class="stat-unit">Hz</span></div>' +
-        '<div class="stat-sub">Netzfrequenz</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Effizienz</div>' +
-        '<div class="stat-main"><span class="stat-ico">🌿</span><span class="stat-val green">' + eff + '</span><span class="stat-unit">%</span></div>' +
-        '<div class="stat-sub">Aktuelle Effizienz</div>' +
-      '</div>' +
-      '<div class="stat-cell">' +
-        '<div class="stat-label">Energie</div>' +
-        '<div class="stat-main"><span class="stat-ico">🔋</span><span class="stat-val orange">' + energy + '</span><span class="stat-unit">Wh</span></div>' +
-        '<div class="stat-sub">Heute verbraucht</div>' +
-      '</div>' +
+      '<div class="stat-cell"><div class="stat-label">Status</div><div class="stat-main"><span class="stat-ico" style="color:#22c55e;">▶</span><span class="stat-val' + statClass + '">' + statusLabel + '</span></div><div class="stat-sub">' + (running ? 'Pumpe aktiv' : 'Pumpe inaktiv') + '</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Leistung</div><div class="stat-main"><span class="stat-ico" style="color:#eab308;">⚡</span><span class="stat-val yellow">' + power + '</span><span class="stat-unit">W</span></div><div class="stat-sub">Aktuelle Leistung</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Spannung</div><div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">∼</span><span class="stat-val blue">' + voltage + '</span><span class="stat-unit">V</span></div><div class="stat-sub">Netzspannung</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Strom</div><div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⌆</span><span class="stat-val blue">' + current + '</span><span class="stat-unit">A</span></div><div class="stat-sub">Aktueller Strom</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Frequenz</div><div class="stat-main"><span class="stat-ico" style="color:#22d3ee;">⊟</span><span class="stat-val blue">' + freq + '</span><span class="stat-unit">Hz</span></div><div class="stat-sub">Netzfrequenz</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Effizienz</div><div class="stat-main"><span class="stat-ico">\U0001f33f</span><span class="stat-val green">' + eff + '</span><span class="stat-unit">%</span></div><div class="stat-sub">Aktuelle Effizienz</div></div>' +
+      '<div class="stat-cell"><div class="stat-label">Energie</div><div class="stat-main"><span class="stat-ico">\U0001f50b</span><span class="stat-val orange">' + energy + '</span><span class="stat-unit">Wh</span></div><div class="stat-sub">Heute verbraucht</div></div>' +
     '</div>';
 
-    /* ── Bottom section ── */
+    // Bottom section
     var toggleClass = autoOn ? 'on' : 'off';
     var toggleLbl   = autoOn ? 'EIN' : 'AUS';
 
     var bottom = '<div class="bottom">' +
-
       '<div class="bpanel">' +
         '<div class="bpanel-title">Laufzeiten</div>' +
         '<div class="brow"><span class="brow-ico">▷</span><span class="brow-lbl">Laufzeit heute</span><span class="brow-val">' + runtime + ' h</span></div>' +
         '<div class="brow"><span class="brow-ico">⏱</span><span class="brow-lbl">Restlaufzeit</span><span class="brow-val">' + remaining + ' h</span></div>' +
         '<div class="brow"><span class="brow-ico">⏰</span><span class="brow-lbl">Nächster Start</span><span class="brow-val">' + nextStart + '</span></div>' +
-        '<div class="brow"><span class="brow-ico">🎯</span><span class="brow-lbl">Tagesziel</span><span class="brow-val">' + target + ' h</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f3af</span><span class="brow-lbl">Tagesziel</span><span class="brow-val">' + target + ' h</span></div>' +
         '<div class="prog-wrap"><div class="prog-fill" style="width:' + progPct + '%"></div></div>' +
         '<div class="prog-pct">' + progPct + '%</div>' +
       '</div>' +
-
       '<div class="bpanel">' +
         '<div class="bpanel-title">Saison</div>' +
         '<div class="hb-sub" style="font-size:11px;">Aktuelle Saison</div>' +
         '<div class="season-name-row"><span class="season-name-icon">' + seasonIcon + '</span><span class="season-name-text">' + seasonLabel + '</span></div>' +
-        '<div class="brow"><span class="brow-ico">🕐</span><span class="brow-lbl">Saisonlaufzeit</span><span class="brow-val">' + seasRT + ' h</span></div>' +
-        '<div class="brow"><span class="brow-ico">🎯</span><span class="brow-lbl">Ziel-Laufzeit</span><span class="brow-val">' + target + ' h</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f550</span><span class="brow-lbl">Saisonlaufzeit</span><span class="brow-val">' + seasRT + ' h</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f3af</span><span class="brow-lbl">Ziel-Laufzeit</span><span class="brow-val">' + target + ' h</span></div>' +
         '<div class="season-link" id="btn-season-cycle">' + seasonIcon + ' Saisonmodus: ' + seasonLabel + '</div>' +
       '</div>' +
-
       '<div class="bpanel">' +
         '<div class="bpanel-title">Wasserqualität</div>' +
-        '<div class="brow"><span class="brow-ico">💧</span><span class="brow-lbl">pH-Wert</span><span class="brow-val">' + ph + '</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f4a7</span><span class="brow-lbl">pH-Wert</span><span class="brow-val">' + ph + '</span></div>' +
         '<div class="brow"><span class="brow-ico">⚡</span><span class="brow-lbl">Redox</span><span class="brow-val">' + redox + ' mV</span></div>' +
-        '<div class="brow"><span class="brow-ico">🌡️</span><span class="brow-lbl">Temperatur</span><span class="brow-val">' + temp + ' °C</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f321️</span><span class="brow-lbl">Temperatur</span><span class="brow-val">' + temp + ' °C</span></div>' +
         '<div class="wq-ok">✓ Alle Werte im optimalen Bereich</div>' +
       '</div>' +
-
       '<div class="bpanel">' +
         '<div class="bpanel-title">Wartung &amp; Betriebsstunden</div>' +
         '<div class="brow"><span class="brow-ico">⚙️</span><span class="brow-lbl">Gesamt</span><span class="brow-val">' + totalRT + ' h</span></div>' +
-        '<div class="brow"><span class="brow-ico">🌿</span><span class="brow-lbl">Saison</span><span class="brow-val">' + seasRT + ' h</span></div>' +
-        '<div class="brow"><span class="brow-ico">🔧</span><span class="brow-lbl">Seit Wartung</span><span class="brow-val">' + maint + ' h</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f33f</span><span class="brow-lbl">Saison</span><span class="brow-val">' + seasRT + ' h</span></div>' +
+        '<div class="brow"><span class="brow-ico">\U0001f527</span><span class="brow-lbl">Seit Wartung</span><span class="brow-val">' + maint + ' h</span></div>' +
         '<div class="maint-ok">✓ Nächste Wartung in ' + maintCountdown + ' h</div>' +
       '</div>' +
-
       '<div class="bpanel ctrl-panel">' +
         '<div class="ctrl-title">Steuerung</div>' +
         '<div class="ctrl-auto-row" id="btn-toggle-auto">' +
@@ -1239,12 +1144,12 @@ class PoolControlCenterCard extends HTMLElement {
           '</div>' +
         '</div>' +
         '<div class="ctrl-main-btns">' +
-          '<button class="btn-start" id="btn-start">▶ Start</button>' +
-          '<button class="btn-stop"  id="btn-stop">■ Stop</button>' +
+          '<button class="btn-start" id="btn-start">▶ Jetzt starten</button>' +
+          '<button class="btn-stop"  id="btn-stop">■ Jetzt stoppen</button>' +
         '</div>' +
         '<div class="ctrl-reset-btns">' +
-          '<button class="btn-reset" id="btn-maint">🔧 Wartung Reset</button>' +
-          '<button class="btn-reset" id="btn-season-reset">📅 Saison Reset</button>' +
+          '<button class="btn-reset" id="btn-maint">\U0001f527 Wartung Reset</button>' +
+          '<button class="btn-reset" id="btn-season-reset">\U0001f4c5 Saison Reset</button>' +
         '</div>' +
         '<div>' +
           '<div class="ctrl-season-lbl">Saisonmodus</div>' +
@@ -1254,46 +1159,41 @@ class PoolControlCenterCard extends HTMLElement {
           '</div>' +
         '</div>' +
       '</div>' +
-
     '</div>';
 
-    /* ── Nav bar ── */
+    // Nav bar — 4 buttons only
     var page = this._page || 'overview';
     var nc = function(p) { return 'nav-btn' + (page === p ? ' active' : ''); };
     var nav = '<div class="nav">' +
-      '<button class="' + nc('overview')     + '" data-page="overview"><span class="nav-ico">🏠</span><span class="nav-lbl">Übersicht</span></button>' +
-      '<button class="' + nc('runtimes')     + '" data-page="runtimes"><span class="nav-ico">🕐</span><span class="nav-lbl">Laufzeiten</span></button>' +
-      '<button class="' + nc('settings')     + '" data-page="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Einstellungen</span></button>' +
-      '<button class="' + nc('maintenance')  + '" data-page="maintenance"><span class="nav-ico">🔧</span><span class="nav-lbl">Wartung</span></button>' +
-      '<button class="' + nc('history')      + '" data-page="history"><span class="nav-ico">📊</span><span class="nav-lbl">Historie</span></button>' +
-      '<button class="' + nc('info')         + '" data-page="info"><span class="nav-ico">ℹ</span><span class="nav-lbl">Info</span></button>' +
+      '<button class="' + nc('overview')    + '" data-page="overview"><span class="nav-ico">\U0001f3e0</span><span class="nav-lbl">Übersicht</span></button>' +
+      '<button class="' + nc('runtimes')    + '" data-page="runtimes"><span class="nav-ico">\U0001f550</span><span class="nav-lbl">Laufzeiten</span></button>' +
+      '<button class="' + nc('settings')    + '" data-page="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Einstellungen</span></button>' +
+      '<button class="' + nc('maintenance') + '" data-page="maintenance"><span class="nav-ico">\U0001f527</span><span class="nav-lbl">Wartung</span></button>' +
     '</div>';
 
-    /* ── Page body ── */
+    // Page body
     var body;
     if (page === 'runtimes') {
-      body = buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT);
+      body = buildPageRuntimes(runtime, remaining, nextStart, target, progPct, seasRT, totalRT, weekData, monthData);
     } else if (page === 'settings') {
       body = buildPageSettings(autoOn, season);
     } else if (page === 'maintenance') {
       body = buildPageMaintenance(maint, totalRT, seasRT, maintCountdown);
-    } else if (page === 'history') {
-      body = buildPageHistory();
-    } else if (page === 'info') {
-      body = buildPageInfo(this._E, this._hass, this._settings.debugMode);
     } else {
       body = mainArea + statBar + bottom;
     }
 
-    /* ── Settings Modal ── */
+    // Settings modal
     var settingsModal = '';
     if (this._settingsOpen) {
-      var curImg    = this._settings.poolImage || (this._cfg && this._cfg.pool_image) || '';
+      var curImg    = this._poolImageData || this._settings.poolImage || (this._cfg && this._cfg.pool_image) || '';
       var debugOn   = this._settings.debugMode;
       var dTogCls   = debugOn ? 'on' : 'off';
       var dTogLbl   = debugOn ? 'EIN' : 'AUS';
       var prevStyle = curImg ? 'background-image:url(\'' + curImg.replace(/'/g, '%27') + '\')' : '';
       var prevTxt   = curImg ? '' : 'Kein Bild gewählt';
+      var urlVal    = (this._settings.poolImage || (this._cfg && this._cfg.pool_image) || '').replace(/"/g, '&#34;');
+
       settingsModal =
         '<div class="settings-overlay" id="settings-overlay">' +
           '<div class="settings-panel" id="settings-panel">' +
@@ -1303,42 +1203,46 @@ class PoolControlCenterCard extends HTMLElement {
             '</div>' +
             '<div class="settings-section">' +
               '<div class="settings-stitle">Pool-Hintergrundbild</div>' +
-              '<div class="settings-note">URL zu einem über HA erreichbaren Bild.<br>Beispiel: <code>/local/pool.jpg</code><br>Leer lassen = automatische CSS-Ansicht.</div>' +
               '<div class="settings-img-preview" style="' + prevStyle + '">' + prevTxt + '</div>' +
-              '<input class="settings-input" id="settings-img-input" type="text" placeholder="/local/pool-pump-manager/pool-background.jpg" value="' + curImg.replace(/"/g, '&#34;') + '">' +
+              '<input type="file" id="settings-img-file" accept="image/*" style="display:none">' +
+              '<button class="file-pick-btn" id="settings-img-pick">\U0001f4f7 Bild von Gerät wählen</button>' +
+              '<div class="settings-note">Oder URL eingeben (z. B. <code>/local/pool.jpg</code>):</div>' +
+              '<input class="settings-input" id="settings-img-input" type="text" placeholder="/local/pool-pump-manager/pool-background.jpg" value="' + urlVal + '">' +
               '<div class="settings-btns">' +
                 '<button class="settings-btn" id="settings-img-apply">Übernehmen</button>' +
                 '<button class="settings-btn sec" id="settings-img-clear">Zurücksetzen</button>' +
               '</div>' +
             '</div>' +
             '<div class="settings-section">' +
+              '<div class="settings-stitle">Diagnose</div>' +
+              buildDiagRows(this._E, this._hass) +
+            '</div>' +
+            '<div class="settings-section">' +
               '<div class="settings-stitle">Debug-Modus</div>' +
               '<div class="settings-row">' +
-                '<div><div class="settings-row-lbl">Erweiterte Diagnose</div><div class="settings-row-sub">Zeigt Entity-Details auf der Info-Seite</div></div>' +
+                '<div><div class="settings-row-lbl">Erweiterte Diagnose</div><div class="settings-row-sub">Entity-Timestamps in Diagnose sichtbar</div></div>' +
                 '<div class="ctrl-toggle-wrap">' +
                   '<span class="ctrl-toggle-lbl ' + dTogCls + '">' + dTogLbl + '</span>' +
                   '<button class="toggle-pill ' + dTogCls + '" id="settings-debug-toggle"></button>' +
                 '</div>' +
               '</div>' +
             '</div>' +
-            '<div class="settings-section dim"><div class="settings-stitle">Theme <span class="settings-soon">demnächst</span></div></div>' +
-            '<div class="settings-section dim"><div class="settings-stitle">Animationen <span class="settings-soon">demnächst</span></div></div>' +
-            '<div class="settings-section dim"><div class="settings-stitle">Akzentfarbe <span class="settings-soon">demnächst</span></div></div>' +
           '</div>' +
         '</div>';
     }
 
-    /* ── Toast overlay ── */
+    // Toast
     var toastHtml = '';
     if (this._toast) {
       toastHtml = '<div class="toast-wrap"><div class="toast ' + this._toast.type + '">' + this._toast.msg + '</div></div>';
     }
 
-    /* ── Assemble ── */
     var html = '<div class="pcc">' + hdr + body + nav + settingsModal + toastHtml + '</div>';
     this.shadowRoot.innerHTML = '<style>' + CARD_CSS + '</style>' + html;
     this._attach();
   }
+
+  // ── Event listeners ───────────────────────────────────────────────────────────
 
   _attach() {
     var root = this.shadowRoot;
@@ -1354,56 +1258,72 @@ class PoolControlCenterCard extends HTMLElement {
       el.classList.add('fx');
     };
 
+    // Automation toggle with optimistic update
     var toggleAuto = function() {
-      var isOn = self._isOn(E.automation);
-      LOG.debug('Automatik toggle – aktuell:', isOn ? 'EIN' : 'AUS');
-      self._svc('switch', isOn ? 'turn_off' : 'turn_on', { entity_id: E.automation },
-        isOn ? 'Automatik AUS' : 'Automatik EIN');
+      var curOn = (self._optimisticAuto !== undefined) ? self._optimisticAuto : self._isOn(E.automation);
+      var newVal = !curOn;
+      LOG.debug('Automatik toggle – wird:', newVal ? 'EIN' : 'AUS');
+      self._optimisticAuto = newVal;
+      self._render();
+      self._svc('switch', newVal ? 'turn_on' : 'turn_off', { entity_id: E.automation },
+        newVal ? 'Automatik EIN' : 'Automatik AUS',
+        function() { self._optimisticAuto = undefined; self._render(); }
+      );
     };
 
+    // Season cycle (from overview badges / dropdowns)
     var cycleSeason = function() {
-      var cur  = self._val(E.seasonMode, 'auto');
+      var cur  = (self._optimisticSeason !== null) ? self._optimisticSeason : self._val(E.seasonMode, 'auto');
       var idx  = SEASON_MODES.indexOf(cur);
       var next = SEASON_MODES[(idx < 0 ? 0 : idx + 1) % SEASON_MODES.length];
       LOG.debug('Saison cycle:', cur, '->', next);
+      self._optimisticSeason = next;
+      self._render();
       self._svc('select', 'select_option', { entity_id: E.seasonMode, option: next },
-        'Saison: ' + (SEASON_LABEL[next] || next));
+        'Saison: ' + (SEASON_LABEL[next] || next),
+        function() { self._optimisticSeason = null; self._render(); }
+      );
     };
 
-    var elHdrAuto = $('hdr-auto-badge');
-    if (elHdrAuto) elHdrAuto.addEventListener('click', toggleAuto);
+    // Header status badge → toggle auto
+    var elStatusBadge = $('hdr-status-badge');
+    if (elStatusBadge) elStatusBadge.addEventListener('click', toggleAuto);
 
     var elHdrSeason = $('hdr-season-badge');
     if (elHdrSeason) elHdrSeason.addEventListener('click', cycleSeason);
 
+    // Warning badge → open settings modal (diagnostics)
+    var elWarn = $('btn-warn');
+    if (elWarn) elWarn.addEventListener('click', function() {
+      self._settingsOpen = true;
+      self._render();
+    });
+
+    // Overview controls
     var elToggle = $('btn-toggle-auto');
     if (elToggle) elToggle.addEventListener('click', function() { fx(elToggle); toggleAuto(); });
 
     var elStart = $('btn-start');
     if (elStart) elStart.addEventListener('click', function() {
       fx(elStart);
-      LOG.debug('Start geklickt');
       self._svc('pool_pump_manager', 'start_now', {}, 'Pumpe gestartet');
     });
 
     var elStop = $('btn-stop');
     if (elStop) elStop.addEventListener('click', function() {
       fx(elStop);
-      LOG.debug('Stop geklickt');
       self._svc('pool_pump_manager', 'stop_now', {}, 'Pumpe gestoppt');
     });
 
     var elMaint = $('btn-maint');
     if (elMaint) elMaint.addEventListener('click', function() {
       fx(elMaint);
-      LOG.debug('Wartung Reset geklickt');
       self._svc('button', 'press', { entity_id: E.btnMaint }, 'Wartung zurückgesetzt');
     });
 
     var elSeaReset = $('btn-season-reset');
     if (elSeaReset) elSeaReset.addEventListener('click', function() {
       fx(elSeaReset);
-      LOG.debug('Saison Reset geklickt');
       self._svc('button', 'press', { entity_id: E.btnSeason }, 'Saison zurückgesetzt');
     });
 
@@ -1413,22 +1333,26 @@ class PoolControlCenterCard extends HTMLElement {
     var elSeaDd = $('btn-season-dd');
     if (elSeaDd) elSeaDd.addEventListener('click', cycleSeason);
 
-    // Settings page: auto toggle row
+    // Settings page: auto toggle
     var elToggleS = $('btn-toggle-auto-s');
     if (elToggleS) elToggleS.addEventListener('click', function() { toggleAuto(); });
 
-    // Settings page: season buttons
+    // Settings page: season buttons with optimistic update
     root.querySelectorAll('.sbtn[data-season]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var opt = this.getAttribute('data-season');
         fx(this);
         LOG.debug('Season direct select:', opt);
+        self._optimisticSeason = opt;
+        self._render();
         self._svc('select', 'select_option', { entity_id: E.seasonMode, option: opt },
-          'Saison: ' + (SEASON_LABEL[opt] || opt));
+          'Saison: ' + (SEASON_LABEL[opt] || opt),
+          function() { self._optimisticSeason = null; self._render(); }
+        );
       });
     });
 
-    // Navigation buttons — switch page and re-render
+    // Nav buttons
     root.querySelectorAll('.nav-btn[data-page]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var pg = this.getAttribute('data-page');
@@ -1438,28 +1362,21 @@ class PoolControlCenterCard extends HTMLElement {
       });
     });
 
-    // Warning badge — navigate to Info/Diagnose
-    var elDiag = $('btn-diag');
-    if (elDiag) elDiag.addEventListener('click', function() {
-      self._page = 'info';
-      self._render();
-    });
-
-    // Gear button — toggle settings modal
+    // Gear button
     var elGear = $('btn-gear');
     if (elGear) elGear.addEventListener('click', function() {
       self._settingsOpen = !self._settingsOpen;
       self._render();
     });
 
-    // Settings modal — close button
+    // Settings modal: close
     var elSettingsClose = $('settings-close');
     if (elSettingsClose) elSettingsClose.addEventListener('click', function() {
       self._settingsOpen = false;
       self._render();
     });
 
-    // Settings modal — click outside panel closes it
+    // Settings modal: click outside panel
     var elOverlay = $('settings-overlay');
     if (elOverlay) elOverlay.addEventListener('click', function(e) {
       var panel = $('settings-panel');
@@ -1469,40 +1386,69 @@ class PoolControlCenterCard extends HTMLElement {
       }
     });
 
-    // Settings modal — apply image URL
+    // Settings modal: file picker
+    var elFilePick  = $('settings-img-pick');
+    var elFileInput = $('settings-img-file');
+    if (elFilePick && elFileInput) {
+      elFilePick.addEventListener('click', function() {
+        elFileInput.click();
+      });
+      elFileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(evt) {
+          try {
+            var data = evt.target.result;
+            window.localStorage.setItem('pcc-v1-imgdata', data);
+            self._poolImageData = data;
+            self._settings.poolImage = '';
+            self._saveSettings();
+            self._settingsOpen = false;
+            self._render();
+          } catch (e) {
+            self._showToast('✗ Bild zu groß für lokalen Speicher', 'err');
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Settings modal: apply URL
     var elImgApply = $('settings-img-apply');
     if (elImgApply) elImgApply.addEventListener('click', function() {
       var inp = $('settings-img-input');
       var val = inp ? inp.value.trim() : '';
       self._settings.poolImage = val;
+      self._poolImageData = '';
+      self._savePoolImageData();
       self._saveSettings();
       self._settingsOpen = false;
-      LOG.debug('Pool image set to:', val || '(default fallback)');
       self._render();
     });
 
-    // Settings modal — clear image (back to CSS default)
+    // Settings modal: clear image
     var elImgClear = $('settings-img-clear');
     if (elImgClear) elImgClear.addEventListener('click', function() {
       self._settings.poolImage = '';
+      self._poolImageData = '';
+      self._savePoolImageData();
       self._saveSettings();
       self._settingsOpen = false;
-      LOG.debug('Pool image cleared — using CSS fallback');
       self._render();
     });
 
-    // Settings modal — debug toggle
+    // Settings modal: debug toggle
     var elDebugToggle = $('settings-debug-toggle');
     if (elDebugToggle) elDebugToggle.addEventListener('click', function() {
       self._settings.debugMode = !self._settings.debugMode;
       self._saveSettings();
-      LOG.debug('Debug mode:', self._settings.debugMode ? 'ON' : 'OFF');
       self._render();
     });
   }
 }
 
-// ── Registration ─────────────────────────────────────────────────────────────
+// ── Registration ──────────────────────────────────────────────────────────────
 
 if (!customElements.get('pool-control-center-card')) {
   customElements.define('pool-control-center-card', PoolControlCenterCard);
